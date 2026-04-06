@@ -1,9 +1,13 @@
 // ── Skins computation ──────────────────────────────────────────────────────────
 // Rules:
-//  • Lowest net score on a hole wins the skin (net = raw - stroke if player gets one)
-//  • Ties: no skin awarded, no carryover
-//  • Strokes use interleaved odd/even handicap system across both nines
-//  • Skins are within each group separately
+//  1. Lowest RAW score on the hole wins the skin outright.
+//  2. If two or more players tie on raw score, the stroke is used as a
+//     tiebreaker: if exactly ONE of the tied players gets a stroke on that
+//     hole (per the interleaved handicap system), that player wins the skin.
+//  3. If the stroke tiebreaker still leaves a tie (both or neither get a
+//     stroke), no skin is awarded.
+//  4. No carryovers — tied holes simply produce no skin.
+//  5. Skins are within each group separately.
 
 function computeSkins(group) {
   const { nine1, nine2, players, scores } = group;
@@ -13,34 +17,46 @@ function computeSkins(group) {
   const skins = [];
 
   pars.forEach((par, hIdx) => {
-    // Collect each player's raw score and net score for this hole
+    // Build hole data for each player
     const holeData = players.map((p, gIdx) => {
       const raw = parseInt((scores[gIdx] || [])[hIdx]) || 0;
       if (!raw) return null;
-      const stroke = playerGetsStroke(p.hdcp, hdcps[hIdx]) ? 1 : 0;
-      return { raw, net: raw - stroke, stroke, name: p.name, gIdx };
+      const hasStroke = playerGetsStroke(p.hdcp, hdcps[hIdx]);
+      return { raw, hasStroke, name: p.name, gIdx };
     });
 
     // Skip hole if any player hasn't posted a score yet
     if (holeData.some(d => d === null)) return;
 
-    const nets   = holeData.map(d => d.net);
-    const minNet = Math.min(...nets);
-    const winners = holeData.filter(d => d.net === minNet);
+    // Step 1 — find lowest raw score
+    const minRaw = Math.min(...holeData.map(d => d.raw));
+    const tied   = holeData.filter(d => d.raw === minRaw);
 
-    if (winners.length === 1) {
-      const w = winners[0];
+    if (tied.length === 1) {
+      // Outright winner — no stroke needed
+      const w = tied[0];
       skins.push({
-        hole:   hIdx + 1,
-        winner: w.name,
-        raw:    w.raw,
-        net:    w.net,
-        par,
-        usedStroke: w.stroke === 1,
+        hole: hIdx + 1, winner: w.name,
+        raw: w.raw, par,
+        usedStroke: false,
+        nineLabel: hIdx < 9 ? nine1 : nine2
+      });
+      return;
+    }
+
+    // Step 2 — tied on raw: use stroke as tiebreaker
+    const tiersWithStroke = tied.filter(d => d.hasStroke);
+    if (tiersWithStroke.length === 1) {
+      // Exactly one tied player gets a stroke -> they win
+      const w = tiersWithStroke[0];
+      skins.push({
+        hole: hIdx + 1, winner: w.name,
+        raw: w.raw, par,
+        usedStroke: true,
         nineLabel: hIdx < 9 ? nine1 : nine2
       });
     }
-    // ties → no skin, no carryover
+    // Otherwise still tied -> no skin
   });
 
   return skins;
