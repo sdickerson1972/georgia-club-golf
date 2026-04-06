@@ -99,11 +99,14 @@ function attachListeners() {
 
   // ── Admin ───────────────────────────────────────────────────────────────────
   on('admin-back', 'click', () => { state.screen = 'home'; render(); });
-  on('admin-unlock', 'click', () => {
+  // ── Admin PIN ──────────────────────────────────────────────────────────────
+  const doUnlock = () => {
     const pin = document.getElementById('admin-pin')?.value || '';
     if (pin === ADMIN_PIN) { state.adminUnlocked = true; render(); }
     else { showToast('Incorrect PIN'); }
-  });
+  };
+  on('admin-unlock', 'click', doUnlock);
+  on('admin-pin', 'keydown', e => { if (e.key === 'Enter') doUnlock(); });
   on('add-player', 'click', () => {
     const name = document.getElementById('new-name')?.value.trim() || '';
     const hdcp = parseInt(document.getElementById('new-hdcp')?.value) || 0;
@@ -241,13 +244,24 @@ async function boot() {
   if (window._firebaseReady) {
     await tryBoot();
   } else {
+    // Firebase SDK loads asynchronously — wait for it
     document.addEventListener('firebase-ready', tryBoot, { once: true });
-    // Fallback if firebase fails to load after 5s
+
+    // Safety fallback: only show an error if the spinner is STILL showing
+    // after 8 seconds (meaning Firebase never initialised at all).
+    // Never interrupt a screen the user is already interacting with.
     setTimeout(() => {
-      if (state.screen === 'home') return;
-      document.getElementById('app').innerHTML =
-        '<div class="empty-state">Could not connect to Firebase.<br>Check your config in index.html.</div>';
-    }, 5000);
+      const app = document.getElementById('app');
+      if (app && app.innerHTML.includes('spinner')) {
+        app.innerHTML =
+          '<div class="empty-state" style="padding:40px 24px">' +
+          '<p style="font-size:16px;font-weight:600;margin-bottom:8px">Connection error</p>' +
+          '<p>Firebase did not load. Please check your config in <code>index.html</code> ' +
+          'and make sure your databaseURL is correct.</p>' +
+          '<button class="btn btn-primary" style="margin-top:16px" onclick="location.reload()">Retry</button>' +
+          '</div>';
+      }
+    }, 8000);
   }
 }
 
