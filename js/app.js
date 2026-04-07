@@ -222,11 +222,20 @@ function attachListeners() {
       const groupId = btn.dataset.deleteGroup;
       if (!confirm(`Delete ${groupId} and all their scores? This cannot be undone.`)) return;
       try {
-        await window._dbRemove(window._dbRef(window._db, FB.groupKey(state.date, groupId)));
+        // Build the exact path key used when saving
+        const pathKey = FB.groupKey(state.date, groupId);
+        console.log('Deleting group at path:', pathKey);
+        const groupRef = window._dbRef(window._db, pathKey);
+        // Set to null is the Firebase way to delete a node
+        await window._dbSet(groupRef, null);
         showToast(`${groupId} deleted`);
         state.todayGroups = await FB.loadGroups(state.date);
         render();
-      } catch(e) { showToast('Delete failed: ' + (e?.message||e)); console.error(e); }
+      } catch(e) {
+        const msg = e?.message || e?.code || String(e);
+        showToast('Delete failed: ' + msg.slice(0, 80));
+        console.error('Delete group error:', e);
+      }
     });
   });
 
