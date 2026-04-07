@@ -61,7 +61,7 @@ function clearSession() {
 const FB = {
   rosterKey: () => 'roster',
   groupsKey:  (date) => `rounds/${date}`,
-  groupKey:   (date, gid) => `rounds/${date}/${gid.replace(/\s/g,'_')}`,
+  groupKey:   (date, gid) => `rounds/${date.replace(/\//g,'-')}/${gid.replace(/[\s.#$\[\]\/]/g,'_')}`,
 
   async saveRoster(roster) {
     await window._dbSet(window._dbRef(window._db, FB.rosterKey()), roster);
@@ -359,10 +359,26 @@ function attachListeners() {
     const ind = document.getElementById('save-indicator');
     if (ind) ind.textContent = 'Saving…';
     try {
-      await FB.saveGroup(state.date, state.groupId, {
-        groupId: state.groupId, nine1: state.nine1, nine2: state.nine2,
-        players: state.groupPlayers, scores: state.scores
+      // Sanitize scores — convert all values to integers, remove nulls/empties
+      const cleanScores = {};
+      Object.keys(state.scores).forEach(gIdx => {
+        cleanScores[gIdx] = {};
+        (state.scores[gIdx] || []).forEach((val, hIdx) => {
+          const n = parseInt(val);
+          if (!isNaN(n) && n > 0) cleanScores[gIdx][hIdx] = n;
+        });
       });
+
+      const payload = {
+        groupId:  state.groupId,
+        nine1:    state.nine1,
+        nine2:    state.nine2,
+        players:  state.groupPlayers,
+        scores:   cleanScores,
+      };
+
+      console.log('Saving payload:', JSON.stringify(payload));
+      await FB.saveGroup(state.date, state.groupId, payload);
       state.saveIndicator = 'Saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       saveSession();
       showToast('Scores saved ✓');
@@ -373,7 +389,10 @@ function attachListeners() {
         if (ind) ind.textContent = state.saveIndicator;
       }
     } catch (e) {
-      showToast('Save failed — check connection'); console.error(e);
+      // Show the actual Firebase error message to help diagnose
+      const msg = e?.message || e?.code || String(e);
+      showToast('Save failed: ' + msg.slice(0, 60));
+      console.error('Save error full details:', e);
       if (ind) ind.textContent = 'Save failed';
     }
   };
