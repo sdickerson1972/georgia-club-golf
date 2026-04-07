@@ -143,7 +143,10 @@ function renderSetup(state, roster) {
   const totalPar = COURSES[nine1].par.reduce((a,b)=>a+b,0) + COURSES[nine2].par.reduce((a,b)=>a+b,0);
 
   const addedIds = new Set(groupPlayers.map(p => p.rosterId));
-  const availableRoster = roster.filter(p => !addedIds.has(p.id));
+  const availableRoster = roster
+    .filter(p => !addedIds.has(p.id))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const rosterOpts = availableRoster.length === 0
     ? '<option disabled>All players added</option>'
@@ -428,9 +431,12 @@ function renderSkinsTab(allGroups) {
       ? Object.entries(summary).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}: ${c}`).join(' · ')
       : '';
 
-    const skinRows = skins.length === 0
+    // Sort skins by hole handicap (1 = hardest = first)
+    const sortedSkins = skins.slice().sort((a, b) => a.hole - b.hole);
+
+    const skinRows = sortedSkins.length === 0
       ? `<div class="no-skins">No skins yet — tied holes or incomplete scores</div>`
-      : skins.map(s => `
+      : sortedSkins.map(s => `
           <div class="skin-row">
             <div>
               <div class="skin-hole">Hole ${s.hole} <span style="font-size:12px;font-weight:400;color:var(--gray-400)">Par ${s.par} · ${s.nineLabel}</span></div>

@@ -151,14 +151,29 @@ function attachListeners() {
   on('btn-admin', 'click', () => { stopLbListener(); state.screen = 'admin'; render(); });
 
   // ── Admin PIN ──────────────────────────────────────────────────────────────
-  const doUnlock = () => {
+  const doUnlock = async () => {
     const pin = document.getElementById('admin-pin')?.value || '';
-    if (pin === ADMIN_PIN) { state.adminUnlocked = true; render(); }
-    else { showToast('Incorrect PIN'); }
+    if (pin !== ADMIN_PIN) { showToast('Incorrect PIN'); return; }
+    const btn = document.getElementById('admin-unlock');
+    if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
+    try {
+      await window._authSignIn(window._auth, window._adminEmail, window._adminPassword);
+      state.adminUnlocked = true;
+      render();
+    } catch (e) {
+      showToast('PIN correct but Firebase sign-in failed — check admin credentials in index.html');
+      console.error('Admin auth error:', e);
+      if (btn) { btn.textContent = 'Unlock'; btn.disabled = false; }
+    }
   };
   on('admin-unlock', 'click', doUnlock);
   on('admin-pin', 'keydown', e => { if (e.key === 'Enter') doUnlock(); });
-  on('admin-back', 'click', () => { state.screen = 'home'; render(); });
+  on('admin-back', 'click', async () => {
+    // Sign out when leaving admin so roster write access is revoked
+    try { await window._authSignOut(window._auth); } catch(e) {}
+    state.adminUnlocked = false;
+    state.screen = 'home'; render();
+  });
   on('add-player', 'click', () => {
     const name = document.getElementById('new-name')?.value.trim() || '';
     const hdcp = parseInt(document.getElementById('new-hdcp')?.value) || 0;
@@ -171,10 +186,18 @@ function attachListeners() {
     state.roster.splice(parseInt(b.dataset.del), 1); render();
   }));
   on('admin-save', 'click', async () => {
+    const user = window._auth?.currentUser;
+    if (!user) {
+      showToast('Not signed in — unlock admin first');
+      return;
+    }
     try {
       await FB.saveRoster(state.roster);
       showToast('Roster saved to cloud ✓');
-    } catch (e) { showToast('Save failed — check Firebase config'); console.error(e); }
+    } catch (e) {
+      showToast('Save failed — check Firebase rules and admin credentials');
+      console.error(e);
+    }
   });
 
   // ── Setup ───────────────────────────────────────────────────────────────────
