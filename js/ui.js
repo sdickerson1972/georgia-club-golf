@@ -374,8 +374,9 @@ function renderScoring(state) {
 
 // ── Leaderboard ────────────────────────────────────────────────────────────────
 function computePlayerResults(group) {
+  try {
   const { nine1, nine2, players, scores, groupId } = group;
-  if (!players || !nine1 || !nine2) return [];
+  if (!players || !nine1 || !nine2 || !COURSES[nine1] || !COURSES[nine2]) return [];
   const { pars, hdcps } = getRoundArrays(nine1, nine2);
   const totalPar = pars.reduce((a,b)=>a+b,0);
 
@@ -401,10 +402,11 @@ function computePlayerResults(group) {
       hScores, pars, hdcps
     };
   });
+  } catch(e) { console.error('computePlayerResults error:', e); return []; }
 }
 
 function renderStandings(allGroups, myGroupId) {
-  const allResults = Object.values(allGroups).flatMap(g => computePlayerResults(g));
+  const allResults = Object.values(allGroups || {}).flatMap(g => { try { return computePlayerResults(g); } catch(e) { return []; } });
   allResults.sort((a, b) => b.diff - a.diff || b.pts - a.pts);
 
   if (allResults.length === 0) {
@@ -441,12 +443,14 @@ function renderStandings(allGroups, myGroupId) {
 }
 
 function renderSkinsTab(allGroups) {
-  const entries = Object.values(allGroups);
+  const entries = Object.values(allGroups || {});
   if (entries.length === 0) return `<div class="empty-state">No groups posted yet.</div>`;
 
   return entries.map(group => {
     if (!group.players || group.players.length < 2) return '';
-    const skins = computeSkins(group);
+    if (!group.nine1 || !group.nine2 || !COURSES[group.nine1] || !COURSES[group.nine2]) return '';
+    let skins = [];
+    try { skins = computeSkins(group); } catch(e) { console.error('Skins error:', e); }
     const summary = skinsSummary(skins);
     const summaryStr = Object.keys(summary).length > 0
       ? Object.entries(summary).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}: ${c}`).join(' · ')
@@ -483,6 +487,17 @@ function renderLeaderboard(allGroups, myGroupId, lastUpdated) {
     ? new Date(lastUpdated).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
     : 'not yet';
 
+  // Guard against render errors crashing the whole screen
+  let standingsHtml = '';
+  let skinsHtml = '';
+  try { standingsHtml = renderStandings(allGroups || {}, myGroupId); }
+  catch(e) { console.error('Standings render error:', e); standingsHtml = `<div class="empty-state">Error loading standings</div>`; }
+  try { skinsHtml = renderSkinsTab(allGroups || {}); }
+  catch(e) { console.error('Skins render error:', e); skinsHtml = `<div class="empty-state">Error loading skins</div>`; }
+
+  // Back to Scoring only if this device has an active round
+  const hasActiveRound = myGroupId && myGroupId.length > 0;
+
   return `
   <div class="header">
     <div class="header-row">
@@ -495,11 +510,11 @@ function renderLeaderboard(allGroups, myGroupId, lastUpdated) {
     <button class="tab-btn" id="tab-skins">Skins</button>
   </div>
   <div class="content">
-    <div id="pane-standings">${renderStandings(allGroups, myGroupId)}</div>
-    <div id="pane-skins" style="display:none">${renderSkinsTab(allGroups)}</div>
+    <div id="pane-standings">${standingsHtml}</div>
+    <div id="pane-skins" style="display:none">${skinsHtml}</div>
     <div style="padding:12px;display:flex;gap:8px">
       <button class="btn" id="lb-home" style="flex:1">← Home</button>
-      ${myGroupId ? `<button class="btn btn-primary" id="lb-back-scoring" style="flex:1">Back to Scoring</button>` : ''}
+      ${hasActiveRound ? `<button class="btn btn-primary" id="lb-back-scoring" style="flex:1">Back to Scoring</button>` : ''}
     </div>
   </div>`;
 }

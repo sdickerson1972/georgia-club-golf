@@ -112,12 +112,14 @@ function startLbListener() {
     state.todayGroups = groups || {};
     state.lastUpdated = Date.now();
     if (state.screen === 'leaderboard') {
-      const standings = document.getElementById('pane-standings');
-      const skinsPane = document.getElementById('pane-skins');
-      if (standings) standings.innerHTML = renderStandings(state.todayGroups, state.groupId);
-      if (skinsPane) skinsPane.innerHTML = renderSkinsTab(state.todayGroups);
-      const p = document.querySelector('.header p');
-      if (p) p.innerHTML = `Updated ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · auto-refreshing`;
+      try {
+        const standings = document.getElementById('pane-standings');
+        const skinsPane = document.getElementById('pane-skins');
+        if (standings) standings.innerHTML = renderStandings(state.todayGroups, state.groupId);
+        if (skinsPane)  skinsPane.innerHTML = renderSkinsTab(state.todayGroups);
+        const p = document.querySelector('.header p');
+        if (p) p.innerHTML = `Updated ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · auto-refreshing`;
+      } catch(e) { console.error('Leaderboard live update error:', e); }
     }
   });
 }
@@ -148,8 +150,10 @@ function attachListeners() {
     }
   });
   on('btn-lb', 'click', async () => {
-    const prevGroupId = state.groupId;
-    state.todayGroups = await FB.loadGroups(state.date);
+    // Preserve groupId only if there's an active round on this device
+    const hasRound = state.groupPlayers.length > 0;
+    const prevGroupId = hasRound ? state.groupId : '';
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
     state.groupId = prevGroupId;
     state.screen = 'leaderboard'; render();
   });
@@ -388,7 +392,7 @@ function attachListeners() {
       saveSession();
       showToast('Scores saved ✓');
       if (thenGo === 'lb') {
-        state.todayGroups = await FB.loadGroups(state.date);
+        try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
         state.screen = 'leaderboard'; render();
       } else {
         if (ind) ind.textContent = state.saveIndicator;
@@ -404,8 +408,8 @@ function attachListeners() {
 
   on('save-btn',    'click', () => doSave(null));
   on('save-lb-btn', 'click', () => doSave('lb'));
-  on('lb-btn',      'click', async () => {
-    state.todayGroups = await FB.loadGroups(state.date);
+  on('lb-btn', 'click', async () => {
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
     state.screen = 'leaderboard'; render();
   });
   on('scoring-back', 'click', () => { state.screen = 'setup'; render(); });
@@ -414,7 +418,7 @@ function attachListeners() {
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
   on('lb-refresh', 'click', async () => {
-    state.todayGroups = await FB.loadGroups(state.date);
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
     state.lastUpdated = Date.now();
     render();
   });
