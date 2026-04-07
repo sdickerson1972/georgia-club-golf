@@ -140,7 +140,8 @@ function renderAdmin(roster) {
 // ── Setup screen ───────────────────────────────────────────────────────────────
 function renderSetup(state, roster) {
   const { nine1, nine2, groupId, groupPlayers, date } = state;
-  const totalPar = COURSES[nine1].par.reduce((a,b)=>a+b,0) + COURSES[nine2].par.reduce((a,b)=>a+b,0);
+  const totalPar = (nine1 ? COURSES[nine1].par.reduce((a,b)=>a+b,0) : 0)
+                 + (nine2 ? COURSES[nine2].par.reduce((a,b)=>a+b,0) : 0);
 
   const addedIds = new Set(groupPlayers.map(p => p.rosterId));
   const availableRoster = roster
@@ -161,6 +162,21 @@ function renderSetup(state, roster) {
       </select>
       <button class="btn btn-xs btn-danger" data-rem="${i}">✕</button>
     </div>`).join('');
+
+  // Nine button label shows order badge if selected
+  const nineBtnLabel = (n) => {
+    if (n === nine1) return `${n} <span style="font-size:10px;background:#fff;color:var(--green);border-radius:10px;padding:1px 5px;margin-left:2px">1st</span>`;
+    if (n === nine2) return `${n} <span style="font-size:10px;background:#fff;color:var(--green);border-radius:10px;padding:1px 5px;margin-left:2px">2nd</span>`;
+    return n;
+  };
+
+  const summaryLine = nine1 && nine2
+    ? `<strong>${nine1}</strong> (par ${COURSES[nine1].par.reduce((a,b)=>a+b,0)})
+       + <strong>${nine2}</strong> (par ${COURSES[nine2].par.reduce((a,b)=>a+b,0)})
+       = par <strong>${totalPar}</strong>`
+    : nine1
+    ? `<strong>${nine1}</strong> selected — tap a second nine`
+    : `Tap to select the first nine`;
 
   return `
   <div class="header">
@@ -187,15 +203,11 @@ function renderSetup(state, roster) {
     </div>
 
     <div class="section">
-      <div class="section-label">Select Two Nines to Play</div>
+      <div class="section-label">Select Two Nines to Play (tap in order)</div>
       <div class="nine-selector">
-        ${['Red','Black','Silver'].map(n=>`<button class="nine-btn ${[nine1,nine2].includes(n)?'active':''}" data-nine="${n}">${n}</button>`).join('')}
+        ${['Red','Black','Silver'].map(n=>`<button class="nine-btn ${n===nine1||n===nine2?'active':''}" data-nine="${n}">${nineBtnLabel(n)}</button>`).join('')}
       </div>
-      <p style="margin-top:8px;font-size:13px;color:var(--gray-600)">
-        <strong>${nine1}</strong> (par ${COURSES[nine1].par.reduce((a,b)=>a+b,0)})
-        + <strong>${nine2}</strong> (par ${COURSES[nine2].par.reduce((a,b)=>a+b,0)})
-        = par <strong>${totalPar}</strong>
-      </p>
+      <p style="margin-top:8px;font-size:13px;color:var(--gray-600)">${summaryLine}</p>
     </div>
 
     <div class="section">
@@ -216,7 +228,7 @@ function renderSetup(state, roster) {
     </div>` : ''}
 
     <div style="padding:12px">
-      <button class="btn btn-primary btn-block" id="start-round" ${groupPlayers.length===0?'disabled':''} style="height:48px;font-size:15px">
+      <button class="btn btn-primary btn-block" id="start-round" ${groupPlayers.length===0||!nine1||!nine2?'disabled':''} style="height:48px;font-size:15px">
         Start Scoring →
       </button>
     </div>

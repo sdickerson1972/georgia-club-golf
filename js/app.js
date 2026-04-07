@@ -228,8 +228,23 @@ function attachListeners() {
   });
   document.querySelectorAll('[data-nine]').forEach(btn => btn.addEventListener('click', () => {
     const n = btn.dataset.nine;
-    if ([state.nine1, state.nine2].includes(n)) return;
-    state.nine2 = state.nine1; state.nine1 = n;
+    if (n === state.nine1) {
+      // Deselect nine1 — promote nine2 to nine1, clear nine2
+      state.nine1 = state.nine2;
+      state.nine2 = null;
+    } else if (n === state.nine2) {
+      // Deselect nine2 — just clear it
+      state.nine2 = null;
+    } else if (!state.nine1) {
+      // Nothing selected yet — set as nine1
+      state.nine1 = n;
+    } else if (!state.nine2) {
+      // One already selected — set as nine2 (preserves order)
+      state.nine2 = n;
+    } else {
+      // Both already selected — replace nine2 with new selection
+      state.nine2 = n;
+    }
     saveSession();
     render();
   }));
