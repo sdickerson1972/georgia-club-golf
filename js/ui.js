@@ -139,18 +139,43 @@ function renderAdmin(roster) {
 
 // ── Setup screen ───────────────────────────────────────────────────────────────
 function renderSetup(state, roster) {
-  const { nine1, nine2, groupId, groupPlayers, date } = state;
+  const { nine1, nine2, groupId, groupPlayers, date, todayGroups } = state;
   const totalPar = (nine1 ? COURSES[nine1].par.reduce((a,b)=>a+b,0) : 0)
                  + (nine2 ? COURSES[nine2].par.reduce((a,b)=>a+b,0) : 0);
 
+  // Build set of roster IDs already in OTHER groups today
+  const takenIds = new Set();
+  const takenByGroup = {}; // rosterId -> groupId
+  Object.values(todayGroups || {}).forEach(group => {
+    if (group.groupId === groupId) return; // skip our own group
+    (group.players || []).forEach(p => {
+      if (p.rosterId) {
+        takenIds.add(p.rosterId);
+        takenByGroup[p.rosterId] = group.groupId;
+      }
+    });
+  });
+
   const addedIds = new Set(groupPlayers.map(p => p.rosterId));
   const availableRoster = roster
-    .filter(p => !addedIds.has(p.id))
+    .filter(p => !addedIds.has(p.id) && !takenIds.has(p.id))
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Players already taken — shown greyed out so scorer knows
+  const takenRoster = roster
+    .filter(p => takenIds.has(p.id))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const takenNote = takenRoster.length > 0
+    ? `<p style="font-size:12px;color:var(--gray-400);margin-top:8px">
+         Already in another group: ${takenRoster.map(p => `${p.name} (${takenByGroup[p.id]})`).join(', ')}
+       </p>`
+    : '';
+
   const rosterOpts = availableRoster.length === 0
-    ? '<option disabled>All players added</option>'
+    ? '<option disabled>No available players</option>'
     : availableRoster.map(p => `<option value="${p.id}">${p.name} (H${p.hdcp}, ${p.tee})</option>`).join('');
 
   const playerRows = groupPlayers.map((p, i) => `
@@ -216,8 +241,9 @@ function renderSetup(state, roster) {
         ? `<p style="font-size:13px;color:#c62828">No roster loaded — go to Admin to add players first.</p>`
         : `<div class="input-row">
              <select id="roster-pick" style="flex:1">${rosterOpts}</select>
-             <button class="btn btn-primary btn-sm" id="add-from-roster" ${groupPlayers.length>=5?'disabled':''}>Add</button>
-           </div>`}
+             <button class="btn btn-primary btn-sm" id="add-from-roster" ${groupPlayers.length>=5||availableRoster.length===0?'disabled':''}>Add</button>
+           </div>
+           ${takenNote}`}
     </div>
 
     ${groupPlayers.length > 0 ? `

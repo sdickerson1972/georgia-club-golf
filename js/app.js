@@ -131,7 +131,12 @@ function attachListeners() {
   const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
 
   // ── Home ────────────────────────────────────────────────────────────────────
-  on('btn-score', 'click', () => { stopLbListener(); state.screen = 'setup'; render(); });
+  on('btn-score', 'click', async () => {
+    stopLbListener();
+    // Load today's groups so we can filter out already-assigned players
+    state.todayGroups = await FB.loadGroups(state.date);
+    state.screen = 'setup'; render();
+  });
   on('btn-resume', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
   on('btn-end-round', 'click', () => {
     if (confirm('End the current round? This will clear your group and scores.')) {
