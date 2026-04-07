@@ -217,7 +217,37 @@ function attachListeners() {
   });
 
   // ── Scoring ─────────────────────────────────────────────────────────────────
+
+  // Debounced autosave to Firebase — fires 2s after the last score entry
+  let autoSaveTimer = null;
+  const scheduleAutoSave = () => {
+    clearTimeout(autoSaveTimer);
+    const ind = document.getElementById('save-indicator');
+    if (ind) ind.textContent = 'Saving…';
+    autoSaveTimer = setTimeout(async () => {
+      try {
+        await FB.saveGroup(state.date, state.groupId, {
+          groupId: state.groupId, nine1: state.nine1, nine2: state.nine2,
+          players: state.groupPlayers, scores: state.scores
+        });
+        state.saveIndicator = 'Auto-saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const ind2 = document.getElementById('save-indicator');
+        if (ind2) ind2.textContent = state.saveIndicator;
+      } catch (e) {
+        const ind2 = document.getElementById('save-indicator');
+        if (ind2) ind2.textContent = 'Auto-save failed';
+        console.warn('Autosave failed:', e);
+      }
+    }, 2000);
+  };
+
+  // Build an ordered flat list of all score inputs so we can advance focus
+  const allInputs = Array.from(document.querySelectorAll('.score-input'));
+
   document.querySelectorAll('.score-input').forEach(inp => {
+    // Select all text when tapping into a box so it's easy to correct
+    inp.addEventListener('focus', e => e.target.select());
+
     inp.addEventListener('input', e => {
       const h = parseInt(e.target.dataset.hole);
       const g = parseInt(e.target.dataset.golfer);
@@ -227,8 +257,18 @@ function attachListeners() {
       const par  = COURSES[nine].par[h % 9];
       const s    = parseInt(e.target.value);
       e.target.className = 'score-input ' + (s ? getScoreClass(s, par) : '');
-      // Auto-save session on every score entry
-      saveSession();
+
+      // Only advance + autosave once a plausible score is entered (1-15)
+      if (s >= 1 && s <= 15) {
+        // Auto-advance to next input
+        const idx = allInputs.indexOf(e.target);
+        if (idx !== -1 && idx < allInputs.length - 1) {
+          setTimeout(() => allInputs[idx + 1].focus(), 50);
+        }
+        // Save session locally and schedule Firebase autosave
+        saveSession();
+        scheduleAutoSave();
+      }
     });
   });
 
