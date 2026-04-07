@@ -18,8 +18,10 @@ function computeSkins(group) {
 
   pars.forEach((par, hIdx) => {
     // Build hole data for each player
+    // scores may be array (local) or object with string keys (from Firebase)
     const holeData = players.map((p, gIdx) => {
-      const raw = parseInt((scores[gIdx] || [])[hIdx]) || 0;
+      const playerScores = scores[gIdx] || scores[String(gIdx)] || {};
+      const raw = parseInt(playerScores[hIdx] ?? playerScores[String(hIdx)]) || 0;
       if (!raw) return null;
       const hasStroke = playerGetsStroke(p.hdcp, hdcps[hIdx]);
       return { raw, hasStroke, name: p.name, gIdx };

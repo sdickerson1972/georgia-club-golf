@@ -380,13 +380,15 @@ function computePlayerResults(group) {
   const totalPar = pars.reduce((a,b)=>a+b,0);
 
   return players.map((p, gIdx) => {
+    // scores may be an array (local) or object with string keys (from Firebase)
+    const playerScores = scores[gIdx] || scores[String(gIdx)] || {};
     let total = 0, pts = 0, playedPar = 0;
     const hScores = pars.map((par, hIdx) => {
-      const s = parseInt((scores[gIdx]||[])[hIdx]) || 0;
+      const s = parseInt(playerScores[hIdx] ?? playerScores[String(hIdx)]) || 0;
       total += s;
       if (s) {
         pts += getPoints(s, par) || 0;
-        playedPar += par;  // only add par for holes that have a score
+        playedPar += par;
       }
       return s;
     });
