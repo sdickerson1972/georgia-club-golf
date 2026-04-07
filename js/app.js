@@ -241,8 +241,51 @@ function attachListeners() {
     }, 2000);
   };
 
-  // Build an ordered flat list of all score inputs so we can advance focus
-  const allInputs = Array.from(document.querySelectorAll('.score-input'));
+  // Build a lookup: [hole][golfer] -> input element
+  // Layout is players-left / holes-across, so advance order is:
+  //   next player on same hole → when last player done, first player on next hole
+  const inputMap = {};
+  document.querySelectorAll('.score-input').forEach(inp => {
+    const h = parseInt(inp.dataset.hole);
+    const g = parseInt(inp.dataset.golfer);
+    if (!inputMap[h]) inputMap[h] = {};
+    inputMap[h][g] = inp;
+  });
+  const numPlayers = state.groupPlayers.length;
+  const totalHoles = 18;
+
+  function getNextInput(currentHole, currentGolfer) {
+    const nextGolfer = currentGolfer + 1;
+    if (nextGolfer < numPlayers && inputMap[currentHole]?.[nextGolfer]) {
+      // Next player, same hole
+      return inputMap[currentHole][nextGolfer];
+    }
+    // Last player on this hole — move to first player on next hole
+    const nextHole = currentHole + 1;
+    if (nextHole < totalHoles && inputMap[nextHole]?.[0]) {
+      return inputMap[nextHole][0];
+    }
+    return null; // end of card
+  }
+
+  // Live-update Tot and Pts cells for a given player on a given nine
+  // without re-rendering the whole table (which would lose focus)
+  function updatePlayerTotals(gIdx, nineIdx) {
+    const nine = nineIdx === 0 ? state.nine1 : state.nine2;
+    const C    = COURSES[nine];
+
+    let total = 0, pts = 0;
+    C.par.forEach((par, hIdx) => {
+      const s = parseInt((state.scores[gIdx] || [])[nineIdx * 9 + hIdx]) || 0;
+      total += s;
+      if (s) pts += getPoints(s, par) || 0;
+    });
+
+    const totCell = document.getElementById(`tot-${nineIdx}-${gIdx}`);
+    const ptsCell = document.getElementById(`pts-${nineIdx}-${gIdx}`);
+    if (totCell) totCell.textContent = total || '';
+    if (ptsCell) ptsCell.textContent = pts;
+  }
 
   document.querySelectorAll('.score-input').forEach(inp => {
     // Select all text when tapping into a box so it's easy to correct
@@ -258,13 +301,15 @@ function attachListeners() {
       const s    = parseInt(e.target.value);
       e.target.className = 'score-input ' + (s ? getScoreClass(s, par) : '');
 
+      // Update the Tot and Pts columns live in the DOM
+      const nineIdx = h < 9 ? 0 : 1;
+      updatePlayerTotals(g, nineIdx);
+
       // Only advance + autosave once a plausible score is entered (1-15)
       if (s >= 1 && s <= 15) {
-        // Auto-advance to next input
-        const idx = allInputs.indexOf(e.target);
-        if (idx !== -1 && idx < allInputs.length - 1) {
-          setTimeout(() => allInputs[idx + 1].focus(), 50);
-        }
+        // Auto-advance: next player on same hole, then first player on next hole
+        const next = getNextInput(h, g);
+        if (next) setTimeout(() => next.focus(), 50);
         // Save session locally and schedule Firebase autosave
         saveSession();
         scheduleAutoSave();

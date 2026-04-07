@@ -292,8 +292,8 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
           <div style="font-size:10px;color:var(--gray-400);padding-left:13px">H${p.hdcp}</div>
         </td>
         ${scoreCells}
-        <td style="font-weight:700;font-size:13px;background:var(--gray-50)">${nineTotal||''}</td>
-        <td style="font-weight:700;font-size:13px;color:var(--green);background:var(--green-pale)">${ninePts}</td>
+        <td id="tot-${nineIdx}-${gIdx}" style="font-weight:700;font-size:13px;background:var(--gray-50)">${nineTotal||''}</td>
+        <td id="pts-${nineIdx}-${gIdx}" style="font-weight:700;font-size:13px;color:var(--green);background:var(--green-pale)">${ninePts}</td>
       </tr>
 `;
   }).join('');
