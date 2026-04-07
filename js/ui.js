@@ -424,8 +424,8 @@ function renderSkinsTab(allGroups) {
       ? Object.entries(summary).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}: ${c}`).join(' · ')
       : '';
 
-    // Sort skins by hole handicap (1 = hardest = first)
-    const sortedSkins = skins.slice().sort((a, b) => a.hole - b.hole);
+    // Sort skins by overall handicap number (1 = hardest = first)
+    const sortedSkins = skins.slice().sort((a, b) => a.overallHdcp - b.overallHdcp);
 
     const skinRows = sortedSkins.length === 0
       ? `<div class="no-skins">No skins yet — tied holes or incomplete scores</div>`
