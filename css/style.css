@@ -309,3 +309,40 @@ table.scorecard tr.pts-row td {
   .score-input { width: 32px; height: 30px; font-size: 13px; }
   table.scorecard { font-size: 12px; }
 }
+
+/* ── Horizontal scorecard (players left, holes across top) ────────────────── */
+.sc-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Freeze the player name column while scrolling horizontally */
+table.scorecard th:first-child,
+table.scorecard td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--white);
+  min-width: 80px;
+  max-width: 100px;
+}
+table.scorecard th:first-child {
+  background: var(--gray-50);
+  z-index: 3;
+}
+table.scorecard tr.yards-row td:first-child {
+  background: var(--gray-50);
+}
+
+/* Hole header columns — compact fixed width */
+table.scorecard th:not(:first-child),
+table.scorecard td:not(:first-child) {
+  min-width: 38px;
+  max-width: 44px;
+}
+
+/* Score inputs fill their cell */
+.score-input {
+  width: 34px;
+  height: 32px;
+}

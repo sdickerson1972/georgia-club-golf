@@ -221,65 +221,81 @@ function renderSetup(state, roster) {
 }
 
 // ── Scorecard nine table ───────────────────────────────────────────────────────
+// Layout: players down the LEFT, hole numbers across the TOP
 function renderNineTable(nine, nineIdx, groupPlayers, scores) {
   const C = COURSES[nine];
-  const { hdcps } = getRoundArrays(
-    nineIdx === 0 ? nine : 'Red',
-    nineIdx === 1 ? nine : 'Red'
-  );
-  // Recalculate correct overall hdcps for this nine in context
   const overallHdcps = C.hdcp.map(h => getOverallHdcp(nineIdx, h));
 
-  const playerHeaders = groupPlayers.map(p =>
-    `<th>${teeDot(p.tee)}${(p.name||'?').split(' ')[0].slice(0,6)}</th>`
-  ).join('');
+  // ── Column headers: blank label col + one col per hole + Total + Pts
+  const holeHeaders = C.par.map((par, hIdx) => {
+    const gh  = nineIdx * 9 + hIdx;
+    const oh  = overallHdcps[hIdx];
+    return `<th>
+      <div style="font-size:12px;font-weight:700">${gh + 1}</div>
+      <div style="font-size:9px;color:var(--gray-400);font-weight:500">P${par}</div>
+      <div style="font-size:9px;color:var(--gray-400)">H${oh}</div>
+    </th>`;
+  }).join('');
 
-  const holeRows = C.par.map((par, hIdx) => {
-    const gh = nineIdx * 9 + hIdx;
-    const oh = overallHdcps[hIdx];
+  // ── Par/yardage info row
+  const parYdsRow = `
+    <tr class="yards-row">
+      <td style="font-size:10px;color:var(--gray-400);text-align:left;padding-left:6px;white-space:nowrap">Yardage</td>
+      ${C.par.map((_, hIdx) => {
+        // Show first player's tee yardage as reference; stroke dots handled per player row
+        const tee = groupPlayers[0]?.tee || 'White';
+        return `<td style="font-size:10px;color:var(--gray-400)">${C.yards[tee][hIdx]}</td>`;
+      }).join('')}
+      <td></td><td></td>
+    </tr>`;
 
-    const scoreCells = groupPlayers.map((p, gIdx) => {
-      const s  = parseInt((scores[gIdx] || [])[gh]) || 0;
+  // ── One row per player
+  const playerRows = groupPlayers.map((p, gIdx) => {
+    const firstName = (p.name || '?').split(' ')[0];
+
+    const scoreCells = C.par.map((par, hIdx) => {
+      const gh  = nineIdx * 9 + hIdx;
+      const oh  = overallHdcps[hIdx];
+      const s   = parseInt((scores[gIdx] || [])[gh]) || 0;
       const cls = s ? getScoreClass(s, par) : '';
       const hasStroke = playerGetsStroke(p.hdcp, oh);
       return `<td>
         <div class="score-cell-wrap">
           <input class="score-input ${cls}" type="number" inputmode="numeric" min="1" max="15"
             value="${s||''}" data-hole="${gh}" data-golfer="${gIdx}"/>
-          ${hasStroke ? '<span class="stroke-dot"></span>' : '<span style="display:block;height:6px"></span>'}
+          ${hasStroke
+            ? '<span class="stroke-dot"></span>'
+            : '<span style="display:block;height:5px"></span>'}
         </div>
       </td>`;
     }).join('');
 
-    // Yardage row per player tee
-    const yardCells = groupPlayers.map(p =>
-      `<td style="font-size:10px;color:var(--gray-400)">${C.yards[p.tee][hIdx]}</td>`
-    ).join('');
+    // Nine total score
+    const nineTotal = C.par.map((_, hIdx) =>
+      parseInt((scores[gIdx]||[])[nineIdx*9+hIdx]) || 0
+    ).reduce((a,b)=>a+b, 0);
+
+    // Nine points
+    let ninePts = 0;
+    C.par.forEach((par, hIdx) => {
+      const s = parseInt((scores[gIdx]||[])[nineIdx*9+hIdx]);
+      if (s) ninePts += getPoints(s, par) || 0;
+    });
 
     return `
       <tr>
-        <td style="font-weight:700">${gh+1}</td>
-        <td><div style="font-weight:700">${par}</div><div style="font-size:10px;color:var(--gray-400)">H${oh}</div></td>
+        <td style="text-align:left;padding-left:8px;white-space:nowrap">
+          <div style="display:flex;align-items:center;gap:5px">
+            ${teeDot(p.tee)}
+            <span style="font-size:13px;font-weight:700">${firstName}</span>
+          </div>
+          <div style="font-size:10px;color:var(--gray-400);padding-left:13px">H${p.hdcp}</div>
+        </td>
         ${scoreCells}
+        <td style="font-weight:700;font-size:13px;background:var(--gray-50)">${nineTotal||''}</td>
+        <td style="font-weight:700;font-size:13px;color:var(--green);background:var(--green-pale)">${ninePts}</td>
       </tr>
-      <tr class="yards-row">
-        <td colspan="2" style="font-size:10px;color:var(--gray-400);text-align:right;padding-right:6px">yds</td>
-        ${yardCells}
-      </tr>`;
-  }).join('');
-
-  // Totals
-  const totCells = groupPlayers.map((_, gIdx) => {
-    const t = C.par.map((_, hIdx) => parseInt((scores[gIdx]||[])[nineIdx*9+hIdx])||0).reduce((a,b)=>a+b,0);
-    return `<td>${t||''}</td>`;
-  }).join('');
-  const ptCells = groupPlayers.map((_, gIdx) => {
-    let pts = 0;
-    C.par.forEach((par, hIdx) => {
-      const s = parseInt((scores[gIdx]||[])[nineIdx*9+hIdx]);
-      if (s) pts += getPoints(s, par) || 0;
-    });
-    return `<td>${pts}</td>`;
+`;
   }).join('');
 
   return `
@@ -290,12 +306,15 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
   </div>
   <div class="sc-wrap">
     <table class="scorecard">
-      <thead><tr><th>H</th><th>Par/Hcp</th>${playerHeaders}</tr></thead>
-      <tbody>
-        ${holeRows}
-        <tr class="totals-row"><td>Tot</td><td>${C.par.reduce((a,b)=>a+b,0)}</td>${totCells}</tr>
-        <tr class="pts-row"><td>Pts</td><td></td>${ptCells}</tr>
-      </tbody>
+      <thead>
+        <tr>
+          <th style="text-align:left;padding-left:8px;min-width:80px">Player</th>
+          ${holeHeaders}
+          <th>Tot</th>
+          <th>Pts</th>
+        </tr>
+      </thead>
+      <tbody>${playerRows}</tbody>
     </table>
   </div>`;
 }
@@ -339,11 +358,14 @@ function computePlayerResults(group) {
   const totalPar = pars.reduce((a,b)=>a+b,0);
 
   return players.map((p, gIdx) => {
-    let total = 0, pts = 0;
+    let total = 0, pts = 0, playedPar = 0;
     const hScores = pars.map((par, hIdx) => {
       const s = parseInt((scores[gIdx]||[])[hIdx]) || 0;
       total += s;
-      if (s) pts += getPoints(s, par) || 0;
+      if (s) {
+        pts += getPoints(s, par) || 0;
+        playedPar += par;  // only add par for holes that have a score
+      }
       return s;
     });
     const holesPlayed = hScores.filter(s => s > 0).length;
@@ -351,7 +373,7 @@ function computePlayerResults(group) {
     return {
       name: p.name, hdcp: p.hdcp, tee: p.tee,
       total, pts, target, diff: pts - target,
-      holesPlayed, totalPar, groupId,
+      holesPlayed, playedPar, totalPar, groupId,
       hScores, pars, hdcps
     };
   });
@@ -374,7 +396,7 @@ function renderStandings(allGroups, myGroupId) {
     </div>`;
 
   const rows = allResults.map((p, i) => {
-    const scoreDiff = p.total > 0 ? p.total - p.totalPar : null;
+    const scoreDiff = p.total > 0 ? p.total - p.playedPar : null;
     const scoreStr  = scoreDiff === null ? '—' : scoreDiff === 0 ? 'E' : scoreDiff > 0 ? `+${scoreDiff}` : `${scoreDiff}`;
     const isMine    = p.groupId === myGroupId;
     const holesStr  = p.holesPlayed < 18 ? ` (${p.holesPlayed}H)` : '';
