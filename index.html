@@ -19,6 +19,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set, get, onValue, update }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, signOut }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     // ── REPLACE THIS BLOCK with your Firebase config ──────────────────────────
     const firebaseConfig = {
@@ -30,17 +32,26 @@
   messagingSenderId: "360369528274",
   appId: "1:360369528274:web:ecc0dd3d038ec8d565fc0b"
 };
+    // ──────────────────────────────────────────────────────────────────────────
 
+    // ── REPLACE with your admin Firebase Auth email & password ────────────────
+    // Create this account in Firebase Console → Authentication → Add user
+    window._adminEmail    = "sdickerson1972@gmail.com";
+    window._adminPassword = "8u11d0g!1972$SD";
     // ──────────────────────────────────────────────────────────────────────────
 
     const firebaseApp = initializeApp(firebaseConfig);
-    const db = getDatabase(firebaseApp);
+    const db   = getDatabase(firebaseApp);
+    const auth = getAuth(firebaseApp);
     window._db = db;
+    window._auth = auth;
     window._dbRef = ref;
     window._dbSet = set;
     window._dbGet = get;
     window._dbOnValue = onValue;
     window._dbUpdate = update;
+    window._authSignIn  = signInWithEmailAndPassword;
+    window._authSignOut = signOut;
     window._firebaseReady = true;
     document.dispatchEvent(new Event("firebase-ready"));
   </script>
