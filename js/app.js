@@ -75,6 +75,12 @@ const FB = {
       ...data, updatedAt: Date.now()
     });
   },
+  async deleteGroup(date, groupId) {
+    await window._dbRemove(window._dbRef(window._db, FB.groupKey(date, groupId)));
+  },
+  async saveGroupData(date, groupId, data) {
+    await window._dbSet(window._dbRef(window._db, FB.groupKey(date, groupId)), data);
+  },
   async loadGroups(date) {
     const snap = await window._dbGet(window._dbRef(window._db, FB.groupsKey(date)));
     return snap.exists() ? snap.val() : {};
@@ -92,7 +98,7 @@ function render() {
     case 'home':
       app.innerHTML = renderHome(state.groupPlayers.length > 0); break;
     case 'admin':
-      app.innerHTML = state.adminUnlocked ? renderAdmin(state.roster) : renderAdminLock(); break;
+      app.innerHTML = state.adminUnlocked ? renderAdmin(state.roster, state.todayGroups) : renderAdminLock(); break;
     case 'setup':
       app.innerHTML = renderSetup(state, state.roster); break;
     case 'scoring':
@@ -157,7 +163,11 @@ function attachListeners() {
     state.groupId = prevGroupId;
     state.screen = 'leaderboard'; render();
   });
-  on('btn-admin', 'click', () => { stopLbListener(); state.screen = 'admin'; render(); });
+  on('btn-admin', 'click', async () => {
+    stopLbListener();
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+    state.screen = 'admin'; render();
+  });
 
   // ── Admin PIN ──────────────────────────────────────────────────────────────
   const doUnlock = async () => {
@@ -196,10 +206,7 @@ function attachListeners() {
   }));
   on('admin-save', 'click', async () => {
     const user = window._auth?.currentUser;
-    if (!user) {
-      showToast('Not signed in — unlock admin first');
-      return;
-    }
+    if (!user) { showToast('Not signed in — unlock admin first'); return; }
     try {
       await FB.saveRoster(state.roster);
       showToast('Roster saved to cloud ✓');
@@ -207,6 +214,49 @@ function attachListeners() {
       showToast('Save failed — check Firebase rules and admin credentials');
       console.error(e);
     }
+  });
+
+  // ── Delete entire group ────────────────────────────────────────────────────
+  document.querySelectorAll('[data-delete-group]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const groupId = btn.dataset.deleteGroup;
+      if (!confirm(`Delete ${groupId} and all their scores? This cannot be undone.`)) return;
+      try {
+        await window._dbRemove(window._dbRef(window._db, FB.groupKey(state.date, groupId)));
+        showToast(`${groupId} deleted`);
+        state.todayGroups = await FB.loadGroups(state.date);
+        render();
+      } catch(e) { showToast('Delete failed: ' + (e?.message||e)); console.error(e); }
+    });
+  });
+
+  // ── Remove player from a group ─────────────────────────────────────────────
+  document.querySelectorAll('[data-remove-player]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pIdx   = parseInt(btn.dataset.removePlayer);
+      const groupId = btn.dataset.groupId;
+      const group  = Object.values(state.todayGroups).find(g => g.groupId === groupId);
+      if (!group) return;
+      const playerName = group.players[pIdx]?.name || 'Player';
+      if (!confirm(`Remove ${playerName} from ${groupId}?`)) return;
+      try {
+        // Remove player and their scores from the group
+        const newPlayers = group.players.filter((_, i) => i !== pIdx);
+        // Rebuild scores — remove the index and rekey remaining players
+        const newScores = {};
+        let newIdx = 0;
+        group.players.forEach((_, oldIdx) => {
+          if (oldIdx === pIdx) return;
+          newScores[newIdx] = group.scores?.[oldIdx] || group.scores?.[String(oldIdx)] || {};
+          newIdx++;
+        });
+        const updatedGroup = { ...group, players: newPlayers, scores: newScores, updatedAt: Date.now() };
+        await window._dbSet(window._dbRef(window._db, FB.groupKey(state.date, groupId)), updatedGroup);
+        showToast(`${playerName} removed from ${groupId}`);
+        state.todayGroups = await FB.loadGroups(state.date);
+        render();
+      } catch(e) { showToast('Remove failed: ' + (e?.message||e)); console.error(e); }
+    });
   });
 
   // ── Setup ───────────────────────────────────────────────────────────────────

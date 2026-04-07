@@ -93,8 +93,8 @@ function renderAdminLock() {
   </div>`;
 }
 
-function renderAdmin(roster) {
-  const rows = roster.length === 0
+function renderAdmin(roster, todayGroups) {
+  const rosterRows = roster.length === 0
     ? '<p style="color:var(--gray-400);font-size:14px">No players yet. Add some below.</p>'
     : `<div class="col-headers" style="grid-template-columns:1fr 52px 96px 30px;margin-bottom:4px">
          <span>Name</span><span style="text-align:center">Hdcp</span><span>Tees</span><span></span>
@@ -107,16 +107,43 @@ function renderAdmin(roster) {
           <button class="btn btn-xs btn-danger" data-del="${i}">✕</button>
         </div>`).join('');
 
+  // Today's active groups
+  const groups = Object.values(todayGroups || {});
+  const groupsHtml = groups.length === 0
+    ? '<p style="color:var(--gray-400);font-size:13px">No groups active today.</p>'
+    : groups.map(group => {
+        const playerRows = (group.players || []).map((p, pIdx) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--gray-100)">
+            <span style="font-size:13px">${teeDot(p.tee)}${p.name} <span style="color:var(--gray-400);font-size:11px">H${p.hdcp}</span></span>
+            <button class="btn btn-xs btn-danger" data-remove-player="${pIdx}" data-group-id="${group.groupId}">Remove</button>
+          </div>`).join('');
+        return `
+          <div style="margin-bottom:12px;border:1px solid var(--gray-200);border-radius:var(--radius-md);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--gray-50)">
+              <span style="font-weight:700;font-size:14px">${group.groupId}</span>
+              <div style="display:flex;gap:6px;align-items:center">
+                <span style="font-size:12px;color:var(--gray-400)">${group.nine1} + ${group.nine2}</span>
+                <button class="btn btn-xs btn-danger" data-delete-group="${group.groupId}">Delete Group</button>
+              </div>
+            </div>
+            <div style="padding:4px 12px 8px">${playerRows}</div>
+          </div>`;
+      }).join('');
+
   return `
   <div class="header">
     <div class="header-row">
-      <div><h1>Admin</h1><p>Player Roster (${roster.length} players)</p></div>
+      <div><h1>Admin</h1><p>Roster & Groups</p></div>
       <button class="btn btn-sm" id="admin-back" style="background:rgba(255,255,255,0.15);color:#fff;border-color:transparent">← Back</button>
     </div>
   </div>
   <div class="content">
     <div class="section">
-      <div class="section-label">Add Player</div>
+      <div class="section-label">Today's Groups</div>
+      ${groupsHtml}
+    </div>
+    <div class="section">
+      <div class="section-label">Add Player to Roster</div>
       <div class="input-row" style="margin-bottom:8px">
         <div class="field"><label class="field-label">Name</label><input type="text" id="new-name" placeholder="Full name"/></div>
         <div class="field" style="max-width:72px"><label class="field-label">Hdcp</label><input type="number" id="new-hdcp" min="0" max="54" placeholder="0"/></div>
@@ -128,8 +155,8 @@ function renderAdmin(roster) {
       <button class="btn btn-primary" id="add-player">+ Add to Roster</button>
     </div>
     <div class="section">
-      <div class="section-label">Current Roster</div>
-      ${rows}
+      <div class="section-label">Current Roster (${roster.length} players)</div>
+      ${rosterRows}
     </div>
     <div style="padding:12px">
       <button class="btn btn-primary btn-block" id="admin-save">Save Roster to Cloud</button>
