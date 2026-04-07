@@ -32,14 +32,16 @@ function computeSkins(group) {
     const minRaw = Math.min(...holeData.map(d => d.raw));
     const tied   = holeData.filter(d => d.raw === minRaw);
 
+    const overallHdcp = hdcps[hIdx];
+    const nineLabel   = hIdx < 9 ? nine1 : nine2;
+
     if (tied.length === 1) {
       // Outright winner — no stroke needed
       const w = tied[0];
       skins.push({
         hole: hIdx + 1, winner: w.name,
-        raw: w.raw, par,
-        usedStroke: false,
-        nineLabel: hIdx < 9 ? nine1 : nine2
+        raw: w.raw, par, overallHdcp, nineLabel,
+        usedStroke: false
       });
       return;
     }
@@ -51,9 +53,8 @@ function computeSkins(group) {
       const w = tiersWithStroke[0];
       skins.push({
         hole: hIdx + 1, winner: w.name,
-        raw: w.raw, par,
-        usedStroke: true,
-        nineLabel: hIdx < 9 ? nine1 : nine2
+        raw: w.raw, par, overallHdcp, nineLabel,
+        usedStroke: true
       });
     }
     // Otherwise still tied -> no skin
