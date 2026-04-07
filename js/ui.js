@@ -451,7 +451,7 @@ function renderSkinsTab(allGroups) {
       : sortedSkins.map(s => `
           <div class="skin-row">
             <div>
-              <div class="skin-hole">Hole ${s.hole} <span style="font-size:12px;font-weight:400;color:var(--gray-400)">Par ${s.par} · ${s.nineLabel}</span></div>
+              <div class="skin-hole">Hole ${s.hole} <span style="font-size:12px;font-weight:400;color:var(--gray-400)">Par ${s.par} · Hcp ${s.overallHdcp} · ${s.nineLabel}</span></div>
               <div class="skin-info">${s.usedStroke ? 'Net score used' : 'Outright win'}</div>
             </div>
             <div class="skin-winner">
