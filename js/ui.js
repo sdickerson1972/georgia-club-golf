@@ -438,7 +438,7 @@ function renderSkinsTab(allGroups) {
             </div>
             <div class="skin-winner">
               <div class="name">${s.winner}</div>
-              <div class="score">${s.raw}${s.usedStroke?`<span class="badge-net">net ${s.net}</span>`:''}</div>
+              <div class="score">${s.raw}${s.usedStroke?`<span class="badge-net">net ${s.raw - 1}</span>`:''}</div>
             </div>
           </div>`).join('');
 
