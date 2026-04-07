@@ -14,6 +14,49 @@ const state = {
   lbListener: null,
 };
 
+// ── Local session persistence ──────────────────────────────────────────────────
+// Saves the active round to localStorage so reopening the app or visiting the
+// leaderboard and coming back doesn't lose the group setup or scores.
+const SESSION_KEY = 'gc_active_round';
+
+function saveSession() {
+  try {
+    const session = {
+      date:         state.date,
+      nine1:        state.nine1,
+      nine2:        state.nine2,
+      groupId:      state.groupId,
+      groupPlayers: state.groupPlayers,
+      scores:       state.scores,
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch (e) { console.warn('Session save failed:', e); }
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    // Only restore if it's from today
+    if (s.date !== todayStr()) {
+      localStorage.removeItem(SESSION_KEY);
+      return false;
+    }
+    state.date         = s.date;
+    state.nine1        = s.nine1;
+    state.nine2        = s.nine2;
+    state.groupId      = s.groupId;
+    state.groupPlayers = s.groupPlayers || [];
+    state.scores       = s.scores || {};
+    return state.groupPlayers.length > 0;
+  } catch (e) { return false; }
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+
 // ── Firebase helpers ───────────────────────────────────────────────────────────
 const FB = {
   rosterKey: () => 'roster',
@@ -47,7 +90,7 @@ function render() {
   const app = document.getElementById('app');
   switch (state.screen) {
     case 'home':
-      app.innerHTML = renderHome(); break;
+      app.innerHTML = renderHome(state.groupPlayers.length > 0); break;
     case 'admin':
       app.innerHTML = state.adminUnlocked ? renderAdmin(state.roster) : renderAdminLock(); break;
     case 'setup':
@@ -80,7 +123,6 @@ function startLbListener() {
 }
 
 function stopLbListener() {
-  // Firebase onValue returns an unsubscribe function
   if (typeof state.lbListener === 'function') { state.lbListener(); state.lbListener = null; }
 }
 
@@ -90,15 +132,24 @@ function attachListeners() {
 
   // ── Home ────────────────────────────────────────────────────────────────────
   on('btn-score', 'click', () => { stopLbListener(); state.screen = 'setup'; render(); });
-  on('btn-lb',    'click', async () => {
-    state.groupId = '';
+  on('btn-resume', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
+  on('btn-end-round', 'click', () => {
+    if (confirm('End the current round? This will clear your group and scores.')) {
+      clearSession();
+      state.groupPlayers = [];
+      state.scores = {};
+      state.groupId = 'Group 1';
+      render();
+    }
+  });
+  on('btn-lb', 'click', async () => {
+    const prevGroupId = state.groupId;
     state.todayGroups = await FB.loadGroups(state.date);
+    state.groupId = prevGroupId;
     state.screen = 'leaderboard'; render();
   });
   on('btn-admin', 'click', () => { stopLbListener(); state.screen = 'admin'; render(); });
 
-  // ── Admin ───────────────────────────────────────────────────────────────────
-  on('admin-back', 'click', () => { state.screen = 'home'; render(); });
   // ── Admin PIN ──────────────────────────────────────────────────────────────
   const doUnlock = () => {
     const pin = document.getElementById('admin-pin')?.value || '';
@@ -107,6 +158,7 @@ function attachListeners() {
   };
   on('admin-unlock', 'click', doUnlock);
   on('admin-pin', 'keydown', e => { if (e.key === 'Enter') doUnlock(); });
+  on('admin-back', 'click', () => { state.screen = 'home'; render(); });
   on('add-player', 'click', () => {
     const name = document.getElementById('new-name')?.value.trim() || '';
     const hdcp = parseInt(document.getElementById('new-hdcp')?.value) || 0;
@@ -126,34 +178,42 @@ function attachListeners() {
   });
 
   // ── Setup ───────────────────────────────────────────────────────────────────
-  on('setup-back',       'click', () => { state.screen = 'home'; render(); });
-  on('date-input',       'change', e => { state.date = e.target.value; });
-  on('group-select',     'change', e => { state.groupId = e.target.value; });
-  on('add-from-roster',  'click', () => {
+  on('setup-back', 'click', () => { state.screen = 'home'; render(); });
+  on('date-input', 'change', e => { state.date = e.target.value; });
+  on('group-select', 'change', e => { state.groupId = e.target.value; });
+  on('add-from-roster', 'click', () => {
     const sel = document.getElementById('roster-pick');
     if (!sel) return;
     const p = state.roster.find(r => r.id === sel.value);
     if (!p || state.groupPlayers.length >= 5) return;
     if (state.groupPlayers.find(gp => gp.rosterId === p.id)) { showToast(`${p.name} already added`); return; }
     state.groupPlayers.push({ rosterId: p.id, name: p.name, hdcp: p.hdcp, tee: p.tee });
+    saveSession();
     render();
   });
   document.querySelectorAll('[data-rem]').forEach(b => b.addEventListener('click', () => {
-    state.groupPlayers.splice(parseInt(b.dataset.rem), 1); render();
+    state.groupPlayers.splice(parseInt(b.dataset.rem), 1);
+    saveSession();
+    render();
   }));
   document.querySelectorAll('[data-gp][data-field]').forEach(inp => {
     inp.addEventListener('change', e => {
       const i = parseInt(e.target.dataset.gp), f = e.target.dataset.field;
       state.groupPlayers[i][f] = f === 'hdcp' ? parseInt(e.target.value) || 0 : e.target.value;
+      saveSession();
     });
   });
   document.querySelectorAll('[data-nine]').forEach(btn => btn.addEventListener('click', () => {
     const n = btn.dataset.nine;
     if ([state.nine1, state.nine2].includes(n)) return;
-    state.nine2 = state.nine1; state.nine1 = n; render();
+    state.nine2 = state.nine1; state.nine1 = n;
+    saveSession();
+    render();
   }));
   on('start-round', 'click', () => {
-    state.scores = {}; state.screen = 'scoring'; render();
+    state.scores = {};
+    saveSession();
+    state.screen = 'scoring'; render();
   });
 
   // ── Scoring ─────────────────────────────────────────────────────────────────
@@ -167,6 +227,8 @@ function attachListeners() {
       const par  = COURSES[nine].par[h % 9];
       const s    = parseInt(e.target.value);
       e.target.className = 'score-input ' + (s ? getScoreClass(s, par) : '');
+      // Auto-save session on every score entry
+      saveSession();
     });
   });
 
@@ -179,6 +241,7 @@ function attachListeners() {
         players: state.groupPlayers, scores: state.scores
       });
       state.saveIndicator = 'Saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      saveSession();
       showToast('Scores saved ✓');
       if (thenGo === 'lb') {
         state.todayGroups = await FB.loadGroups(state.date);
@@ -192,9 +255,9 @@ function attachListeners() {
     }
   };
 
-  on('save-btn',     'click', () => doSave(null));
-  on('save-lb-btn',  'click', () => doSave('lb'));
-  on('lb-btn',       'click', async () => {
+  on('save-btn',    'click', () => doSave(null));
+  on('save-lb-btn', 'click', () => doSave('lb'));
+  on('lb-btn',      'click', async () => {
     state.todayGroups = await FB.loadGroups(state.date);
     state.screen = 'leaderboard'; render();
   });
@@ -230,7 +293,6 @@ async function boot() {
   const tryBoot = async () => {
     try {
       state.roster = await FB.loadRoster() || [];
-      // Ensure roster is an array (Firebase may return object)
       if (!Array.isArray(state.roster)) {
         state.roster = Object.values(state.roster);
       }
@@ -238,18 +300,22 @@ async function boot() {
       console.warn('Could not load roster:', e);
       state.roster = [];
     }
+
+    // Restore any in-progress round from today
+    const hasSession = loadSession();
+    if (hasSession) {
+      // Show home with a "Resume Round" banner instead of jumping straight
+      // into scoring — gives the user control
+      state.screen = 'home';
+    }
+
     render();
   };
 
   if (window._firebaseReady) {
     await tryBoot();
   } else {
-    // Firebase SDK loads asynchronously — wait for it
     document.addEventListener('firebase-ready', tryBoot, { once: true });
-
-    // Safety fallback: only show an error if the spinner is STILL showing
-    // after 8 seconds (meaning Firebase never initialised at all).
-    // Never interrupt a screen the user is already interacting with.
     setTimeout(() => {
       const app = document.getElementById('app');
       if (app && app.innerHTML.includes('spinner')) {

@@ -28,18 +28,29 @@ function rankClass(i) {
 }
 
 // ── Home screen ────────────────────────────────────────────────────────────────
-function renderHome() {
+function renderHome(hasActiveRound) {
+  const resumeBanner = hasActiveRound ? `
+    <div style="margin:12px 12px 0;background:#fff3cd;border:1.5px solid #ffc107;border-radius:var(--radius-lg);padding:14px 16px">
+      <div style="font-size:13px;font-weight:700;color:#7a5c00;margin-bottom:8px">⛳ Round in progress</div>
+      <div style="font-size:13px;color:#7a5c00;margin-bottom:10px">You have an active round saved. Pick up where you left off.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" id="btn-resume" style="flex:1">Resume Scoring</button>
+        <button class="btn btn-sm btn-danger" id="btn-end-round" style="flex:1">End Round</button>
+      </div>
+    </div>` : '';
+
   return `
   <div class="header">
     <h1>The Georgia Club</h1>
     <p>Chancellors Course — Statham, GA</p>
   </div>
   <div class="content" style="padding-top:8px">
+    ${resumeBanner}
     <div class="home-card" id="btn-score">
       <div class="home-card-icon">⛳</div>
       <div class="home-card-text">
-        <h2>Score a Round</h2>
-        <p>Set up your group and enter hole-by-hole scores</p>
+        <h2>${hasActiveRound ? 'New Round' : 'Score a Round'}</h2>
+        <p>${hasActiveRound ? 'Start fresh with a new group setup' : 'Set up your group and enter hole-by-hole scores'}</p>
       </div>
     </div>
     <div class="home-card" id="btn-lb">
