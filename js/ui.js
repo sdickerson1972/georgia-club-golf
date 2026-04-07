@@ -236,33 +236,21 @@ function renderSetup(state, roster) {
 }
 
 // ── Scorecard nine table ───────────────────────────────────────────────────────
-// Layout: players down the LEFT, hole numbers across the TOP
+// Layout: players down LEFT, all 9 holes across TOP, horizontally scrollable
 function renderNineTable(nine, nineIdx, groupPlayers, scores) {
   const C = COURSES[nine];
   const overallHdcps = C.hdcp.map(h => getOverallHdcp(nineIdx, h));
 
-  // ── Column headers: blank label col + one col per hole + Total + Pts
+  // ── Column headers — all 9 holes
   const holeHeaders = C.par.map((par, hIdx) => {
-    const gh  = nineIdx * 9 + hIdx;
-    const oh  = overallHdcps[hIdx];
+    const gh = nineIdx * 9 + hIdx;
+    const oh = overallHdcps[hIdx];
     return `<th>
-      <div style="font-size:12px;font-weight:700">${gh + 1}</div>
-      <div style="font-size:9px;color:var(--gray-400);font-weight:500">P${par}</div>
-      <div style="font-size:9px;color:var(--gray-400)">H${oh}</div>
+      <div style="font-size:16px;font-weight:700">${gh + 1}</div>
+      <div style="font-size:12px;color:var(--gray-400);font-weight:500">P${par}</div>
+      <div style="font-size:12px;color:var(--gray-400)">H${oh}</div>
     </th>`;
   }).join('');
-
-  // ── Par/yardage info row
-  const parYdsRow = `
-    <tr class="yards-row">
-      <td style="font-size:10px;color:var(--gray-400);text-align:left;padding-left:6px;white-space:nowrap">Yardage</td>
-      ${C.par.map((_, hIdx) => {
-        // Show first player's tee yardage as reference; stroke dots handled per player row
-        const tee = groupPlayers[0]?.tee || 'White';
-        return `<td style="font-size:10px;color:var(--gray-400)">${C.yards[tee][hIdx]}</td>`;
-      }).join('')}
-      <td></td><td></td>
-    </tr>`;
 
   // ── One row per player
   const playerRows = groupPlayers.map((p, gIdx) => {
@@ -274,43 +262,36 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
       const s   = parseInt((scores[gIdx] || [])[gh]) || 0;
       const cls = s ? getScoreClass(s, par) : '';
       const hasStroke = playerGetsStroke(p.hdcp, oh);
-      return `<td>
+      return `<td style="padding:4px 3px">
         <div class="score-cell-wrap">
           <input class="score-input ${cls}" type="number" inputmode="numeric" min="1" max="15"
             value="${s||''}" data-hole="${gh}" data-golfer="${gIdx}"/>
           ${hasStroke
             ? '<span class="stroke-dot"></span>'
-            : '<span style="display:block;height:5px"></span>'}
+            : '<span style="display:block;height:6px"></span>'}
         </div>
       </td>`;
     }).join('');
 
-    // Nine total score
-    const nineTotal = C.par.map((_, hIdx) =>
-      parseInt((scores[gIdx]||[])[nineIdx*9+hIdx]) || 0
-    ).reduce((a,b)=>a+b, 0);
-
-    // Nine points
-    let ninePts = 0;
+    let nineTotal = 0, ninePts = 0;
     C.par.forEach((par, hIdx) => {
       const s = parseInt((scores[gIdx]||[])[nineIdx*9+hIdx]);
-      if (s) ninePts += getPoints(s, par) || 0;
+      if (s) { nineTotal += s; ninePts += getPoints(s, par) || 0; }
     });
 
     return `
       <tr>
-        <td style="text-align:left;padding-left:8px;white-space:nowrap">
+        <td style="text-align:left;padding-left:8px;white-space:nowrap;min-width:80px">
           <div style="display:flex;align-items:center;gap:5px">
             ${teeDot(p.tee)}
-            <span style="font-size:13px;font-weight:700">${firstName}</span>
+            <span style="font-size:14px;font-weight:700">${firstName}</span>
           </div>
-          <div style="font-size:10px;color:var(--gray-400);padding-left:13px">H${p.hdcp}</div>
+          <div style="font-size:11px;color:var(--gray-400);padding-left:13px">H${p.hdcp}</div>
         </td>
         ${scoreCells}
-        <td id="tot-${nineIdx}-${gIdx}" style="font-weight:700;font-size:13px;background:var(--gray-50)">${nineTotal||''}</td>
-        <td id="pts-${nineIdx}-${gIdx}" style="font-weight:700;font-size:13px;color:var(--green);background:var(--green-pale)">${ninePts}</td>
-      </tr>
-`;
+        <td id="tot-${nineIdx}-${gIdx}" style="font-weight:700;font-size:14px;background:var(--gray-50);padding:4px 5px">${nineTotal||''}</td>
+        <td id="pts-${nineIdx}-${gIdx}" style="font-weight:700;font-size:14px;color:var(--green);background:var(--green-pale);padding:4px 5px">${ninePts}</td>
+      </tr>`;
   }).join('');
 
   return `
@@ -325,8 +306,8 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
         <tr>
           <th style="text-align:left;padding-left:8px;min-width:80px">Player</th>
           ${holeHeaders}
-          <th>Tot</th>
-          <th>Pts</th>
+          <th style="min-width:40px">Tot</th>
+          <th style="min-width:40px">Pts</th>
         </tr>
       </thead>
       <tbody>${playerRows}</tbody>
@@ -353,7 +334,7 @@ function renderScoring(state) {
   </div>
   <div class="content">
     ${renderNineTable(nine1, 0, groupPlayers, scores)}
-    <div class="divider" style="margin:0 12px"></div>
+    <div class="divider" style="margin:8px 12px"></div>
     ${renderNineTable(nine2, 1, groupPlayers, scores)}
     <div style="padding:12px;display:flex;gap:8px">
       <button class="btn" id="scoring-back" style="flex:1">← Setup</button>

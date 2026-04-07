@@ -405,6 +405,8 @@ function attachListeners() {
   });
   on('scoring-back', 'click', () => { state.screen = 'setup'; render(); });
 
+
+
   // ── Leaderboard ──────────────────────────────────────────────────────────────
   on('lb-refresh', 'click', async () => {
     state.todayGroups = await FB.loadGroups(state.date);
