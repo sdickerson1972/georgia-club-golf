@@ -1,13 +1,21 @@
 // ── Skins computation ──────────────────────────────────────────────────────────
 // Rules:
-//  1. Lowest RAW score on the hole wins the skin outright.
-//  2. If two or more players tie on raw score, the stroke is used as a
-//     tiebreaker: if exactly ONE of the tied players gets a stroke on that
-//     hole (per the interleaved handicap system), that player wins the skin.
-//  3. If the stroke tiebreaker still leaves a tie (both or neither get a
-//     stroke), no skin is awarded.
-//  4. No carryovers — tied holes simply produce no skin.
+//  1. Find the best raw score on the hole.
+//  2. If that best score is better than par (birdie or better), it wins
+//     outright — strokes are irrelevant. One player must have it alone.
+//  3. If the best score is par or worse, apply strokes first:
+//     net score = raw - (1 if player gets stroke, else 0)
+//     Then find the best NET score. If one player has it alone, they win.
+//  4. Ties at any level → no skin, no carryover.
 //  5. Skins are within each group separately.
+//
+//  Examples:
+//   Eagle vs par        → eagle wins outright (birdie or better rule)
+//   Birdie vs par+stroke → birdie wins outright
+//   Par vs bogey+stroke  → par=4, bogey net=4 → tie, no skin
+//   Par vs bogey no stroke → par wins outright (net bogey=5)
+//   Par+stroke vs par no stroke → net 3 vs net 4 → stroke player wins
+//   Two pars, one gets stroke → net 3 vs net 4 → stroke player wins
 
 function computeSkins(group) {
   const { nine1, nine2, players, scores } = group;
@@ -24,42 +32,46 @@ function computeSkins(group) {
       const raw = parseInt(playerScores[hIdx] ?? playerScores[String(hIdx)]) || 0;
       if (!raw) return null;
       const hasStroke = playerGetsStroke(p.hdcp, hdcps[hIdx]);
-      return { raw, hasStroke, name: p.name, gIdx };
+      const net = raw - (hasStroke ? 1 : 0);
+      return { raw, net, hasStroke, name: p.name, gIdx };
     });
 
     // Skip hole if any player hasn't posted a score yet
     if (holeData.some(d => d === null)) return;
 
-    // Step 1 — find lowest raw score
-    const minRaw = Math.min(...holeData.map(d => d.raw));
-    const tied   = holeData.filter(d => d.raw === minRaw);
-
     const overallHdcp = hdcps[hIdx];
     const nineLabel   = hIdx < 9 ? nine1 : nine2;
 
-    if (tied.length === 1) {
-      // Outright winner — no stroke needed
-      const w = tied[0];
-      skins.push({
-        hole: hIdx + 1, winner: w.name,
-        raw: w.raw, par, overallHdcp, nineLabel,
-        usedStroke: false
-      });
+    // Step 1 — find the best raw score
+    const minRaw = Math.min(...holeData.map(d => d.raw));
+
+    // Step 2 — if best raw is birdie or better (under par), strokes don't apply
+    if (minRaw < par) {
+      const winners = holeData.filter(d => d.raw === minRaw);
+      if (winners.length === 1) {
+        skins.push({
+          hole: hIdx + 1, winner: winners[0].name,
+          raw: winners[0].raw, par, overallHdcp, nineLabel,
+          usedStroke: false
+        });
+      }
+      // Tied birdies/eagles → no skin
       return;
     }
 
-    // Step 2 — tied on raw: use stroke as tiebreaker
-    const tiersWithStroke = tied.filter(d => d.hasStroke);
-    if (tiersWithStroke.length === 1) {
-      // Exactly one tied player gets a stroke -> they win
-      const w = tiersWithStroke[0];
+    // Step 3 — par or worse: use net scores (raw - stroke)
+    const minNet = Math.min(...holeData.map(d => d.net));
+    const netWinners = holeData.filter(d => d.net === minNet);
+
+    if (netWinners.length === 1) {
+      const w = netWinners[0];
       skins.push({
         hole: hIdx + 1, winner: w.name,
         raw: w.raw, par, overallHdcp, nineLabel,
-        usedStroke: true
+        usedStroke: w.hasStroke
       });
     }
-    // Otherwise still tied -> no skin
+    // Tied net scores → no skin
   });
 
   return skins;

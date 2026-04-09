@@ -12,6 +12,7 @@ const state = {
   saveIndicator: '',
   lastUpdated: null,
   lbListener: null,
+  lbDate: null,   // date shown on leaderboard (defaults to today on open)
 };
 
 // ── Local session persistence ──────────────────────────────────────────────────
@@ -104,7 +105,7 @@ function render() {
     case 'scoring':
       app.innerHTML = renderScoring(state); break;
     case 'leaderboard':
-      app.innerHTML = renderLeaderboard(state.todayGroups, state.groupId, state.lastUpdated);
+      app.innerHTML = renderLeaderboard(state.todayGroups, state.groupId, state.lastUpdated, state.lbDate || todayStr());
       startLbListener(); break;
   }
   attachListeners();
@@ -114,7 +115,10 @@ function render() {
 function startLbListener() {
   stopLbListener();
   if (!window._firebaseReady) return;
-  state.lbListener = FB.subscribeGroups(state.date, (groups) => {
+  // Only auto-subscribe for live updates when viewing today's round
+  const viewDate = state.lbDate || todayStr();
+  if (viewDate !== todayStr()) return;
+  state.lbListener = FB.subscribeGroups(viewDate, (groups) => {
     state.todayGroups = groups || {};
     state.lastUpdated = Date.now();
     if (state.screen === 'leaderboard') {
@@ -156,10 +160,10 @@ function attachListeners() {
     }
   });
   on('btn-lb', 'click', async () => {
-    // Preserve groupId only if there's an active round on this device
     const hasRound = state.groupPlayers.length > 0;
     const prevGroupId = hasRound ? state.groupId : '';
-    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+    state.lbDate = todayStr();  // always reset to today when opening from home
+    try { state.todayGroups = await FB.loadGroups(state.lbDate); } catch(e) { state.todayGroups = {}; }
     state.groupId = prevGroupId;
     state.screen = 'leaderboard'; render();
   });
@@ -468,7 +472,8 @@ function attachListeners() {
   on('save-btn',    'click', () => doSave(null));
   on('save-lb-btn', 'click', () => doSave('lb'));
   on('lb-btn', 'click', async () => {
-    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+    state.lbDate = todayStr();
+    try { state.todayGroups = await FB.loadGroups(state.lbDate); } catch(e) { state.todayGroups = {}; }
     state.screen = 'leaderboard'; render();
   });
   on('scoring-back', 'click', () => { state.screen = 'setup'; render(); });
@@ -477,10 +482,30 @@ function attachListeners() {
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
   on('lb-refresh', 'click', async () => {
-    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+    try { state.todayGroups = await FB.loadGroups(state.lbDate || todayStr()); } catch(e) { state.todayGroups = {}; }
     state.lastUpdated = Date.now();
     render();
   });
+
+  on('lb-date-pick', 'change', async e => {
+    const picked = e.target.value;
+    if (!picked) return;
+    state.lbDate = picked;
+    state.lastUpdated = null;
+    stopLbListener();
+    try { state.todayGroups = await FB.loadGroups(state.lbDate); } catch(e2) { state.todayGroups = {}; }
+    state.lastUpdated = Date.now();
+    render();
+  });
+
+  on('lb-goto-today', 'click', async () => {
+    state.lbDate = todayStr();
+    state.lastUpdated = null;
+    try { state.todayGroups = await FB.loadGroups(state.lbDate); } catch(e) { state.todayGroups = {}; }
+    state.lastUpdated = Date.now();
+    render();
+  });
+
   on('lb-home', 'click', () => { stopLbListener(); state.screen = 'home'; render(); });
   on('lb-back-scoring', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
 

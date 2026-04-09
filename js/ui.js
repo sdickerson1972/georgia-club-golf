@@ -509,10 +509,14 @@ function renderSkinsTab(allGroups) {
   }).join('');
 }
 
-function renderLeaderboard(allGroups, myGroupId, lastUpdated) {
-  const timeStr = lastUpdated
+function renderLeaderboard(allGroups, myGroupId, lastUpdated, lbDate) {
+  const isToday  = lbDate === todayStr();
+  const timeStr  = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
     : 'not yet';
+  const subtitle = isToday
+    ? `Today · Updated ${timeStr}`
+    : `${lbDate} · historical`;
 
   // Guard against render errors crashing the whole screen
   let standingsHtml = '';
@@ -522,13 +526,13 @@ function renderLeaderboard(allGroups, myGroupId, lastUpdated) {
   try { skinsHtml = renderSkinsTab(allGroups || {}); }
   catch(e) { console.error('Skins render error:', e); skinsHtml = `<div class="empty-state">Error loading skins</div>`; }
 
-  // Back to Scoring only if this device has an active round
-  const hasActiveRound = myGroupId && myGroupId.length > 0;
+  // Back to Scoring only if this device has an active round and we're viewing today
+  const hasActiveRound = myGroupId && myGroupId.length > 0 && isToday;
 
   return `
   <div class="header">
     <div class="header-row">
-      <div><h1>Leaderboard</h1><p>Updated ${timeStr} · tap Refresh for latest</p></div>
+      <div><h1>Leaderboard</h1><p>${subtitle}</p></div>
       <button class="btn btn-sm" id="lb-refresh" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.3)">Refresh</button>
     </div>
   </div>
@@ -537,6 +541,15 @@ function renderLeaderboard(allGroups, myGroupId, lastUpdated) {
     <button class="tab-btn" id="tab-skins">Skins</button>
   </div>
   <div class="content">
+    <div style="padding:10px 12px 0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);white-space:nowrap">Round date</label>
+        <input type="date" id="lb-date-pick" value="${lbDate}"
+          style="height:36px;border:1.5px solid var(--gray-200);border-radius:var(--radius-md);
+                 background:var(--white);color:var(--gray-800);padding:0 10px;font-size:13px;flex:1"/>
+        ${!isToday ? `<button class="btn btn-sm" id="lb-goto-today">Today</button>` : ''}
+      </div>
+    </div>
     <div id="pane-standings">${standingsHtml}</div>
     <div id="pane-skins" style="display:none">${skinsHtml}</div>
     <div style="padding:12px;display:flex;gap:8px">
