@@ -453,11 +453,13 @@ function renderStandings(allGroups, myGroupId) {
     const scoreStr  = scoreDiff === null ? '—' : scoreDiff === 0 ? 'E' : scoreDiff > 0 ? `+${scoreDiff}` : `${scoreDiff}`;
     const isMine    = p.groupId === myGroupId;
     const holesStr  = p.holesPlayed < 18 ? ` (${p.holesPlayed}H)` : '';
+    const gidSafe   = (p.groupId || '').replace(/"/g, '&quot;');
     return `
-      <div class="lb-row ${isMine ? 'lb-mine' : ''}">
+      <div class="lb-row ${isMine ? 'lb-mine' : ''}" data-open-group="${gidSafe}"
+           style="cursor:pointer">
         <div class="lb-rank ${rankClass(i)}">${i+1}</div>
         <div>
-          <div class="lb-name">${p.name}${holesStr}</div>
+          <div class="lb-name">${p.name}${holesStr} <span style="font-size:11px;color:var(--gray-400)">▶</span></div>
           <div class="lb-sub">${p.groupId} · ${teeDot(p.tee)}${p.tee} · H${p.hdcp} · Target ${p.target}</div>
         </div>
         <div class="lb-num"><div class="val">${p.pts}</div><div class="lbl">pts</div></div>
@@ -467,6 +469,146 @@ function renderStandings(allGroups, myGroupId) {
   }).join('');
 
   return headerRow + rows;
+}
+
+// ── Group scorecard modal ──────────────────────────────────────────────────────
+function renderGroupScorecard(group) {
+  if (!group || !group.players || !group.nine1 || !group.nine2) return '<p>No data.</p>';
+  const { nine1, nine2, players, scores } = group;
+  if (!COURSES[nine1] || !COURSES[nine2]) return '<p>Unknown course.</p>';
+
+  const nines = [nine1, nine2];
+  const overallHdcps = [
+    COURSES[nine1].hdcp.map(h => getOverallHdcp(0, h)),
+    COURSES[nine2].hdcp.map(h => getOverallHdcp(1, h))
+  ];
+
+  const tables = nines.map((nine, nineIdx) => {
+    const C = COURSES[nine];
+    // Header row — hole numbers
+    const holeHeaders = C.par.map((par, hIdx) => {
+      const gh = nineIdx * 9 + hIdx;
+      const oh = overallHdcps[nineIdx][hIdx];
+      return `<th style="min-width:28px;font-size:11px">
+        <div style="font-weight:700">${gh+1}</div>
+        <div style="color:var(--gray-400);font-size:10px">P${par}</div>
+        <div style="color:var(--gray-400);font-size:10px">H${oh}</div>
+      </th>`;
+    }).join('');
+
+    // One row per player
+    const playerRows = players.map((p, gIdx) => {
+      const firstName = (p.name||'?').split(' ')[0];
+      const playerScores = scores[gIdx] || scores[String(gIdx)] || {};
+      let nineTotal = 0, ninePts = 0;
+
+      const scoreCells = C.par.map((par, hIdx) => {
+        const gh = nineIdx * 9 + hIdx;
+        const s  = parseInt(playerScores[gh] ?? playerScores[String(gh)]) || 0;
+        const oh = overallHdcps[nineIdx][hIdx];
+        const cls = s ? getScoreClass(s, par) : '';
+        const hasStroke = playerGetsStroke(p.hdcp, oh);
+        if (s) { nineTotal += s; ninePts += getPoints(s, par) || 0; }
+        return `<td style="padding:2px;text-align:center">
+          <div class="score-badge ${cls}" style="
+            display:inline-block;width:26px;height:26px;line-height:26px;
+            border-radius:4px;font-size:13px;font-weight:700;text-align:center;
+            border:1px solid var(--gray-200);background:var(--white)">
+            ${s||''}
+          </div>
+          ${hasStroke ? '<div style="width:5px;height:5px;border-radius:50%;background:var(--blue-text);margin:1px auto 0"></div>'
+                      : '<div style="height:6px"></div>'}
+        </td>`;
+      }).join('');
+
+      return `<tr>
+        <td style="padding:4px 6px;white-space:nowrap;position:sticky;left:0;background:var(--white);z-index:2">
+          <div style="display:flex;align-items:center;gap:4px">
+            ${teeDot(p.tee)}
+            <span style="font-size:13px;font-weight:700">${firstName}</span>
+          </div>
+          <div style="font-size:10px;color:var(--gray-400);padding-left:13px">H${p.hdcp}</div>
+        </td>
+        ${scoreCells}
+        <td style="text-align:center;font-weight:700;font-size:13px;background:var(--gray-50);padding:2px 4px">${nineTotal||''}</td>
+        <td style="text-align:center;font-weight:700;font-size:13px;color:var(--green);background:var(--green-pale);padding:2px 4px">${ninePts}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 0 4px">
+        <span style="display:inline-block;width:4px;height:18px;border-radius:2px;background:${C.color}"></span>
+        <span style="font-size:13px;font-weight:700;color:${C.color}">${C.name}</span>
+        <span style="font-size:11px;color:var(--gray-400)">par ${C.par.reduce((a,b)=>a+b,0)}</span>
+      </div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--gray-50)">
+              <th style="text-align:left;padding:4px 6px;min-width:72px;position:sticky;left:0;background:var(--gray-50);z-index:3">Player</th>
+              ${holeHeaders}
+              <th style="min-width:28px;font-size:11px">Tot</th>
+              <th style="min-width:28px;font-size:11px">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${playerRows}</tbody>
+        </table>
+      </div>`;
+  }).join('<div style="height:1px;background:var(--gray-200);margin:8px 0"></div>');
+
+  // Points legend
+  const legend = `<div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 0 2px;font-size:11px;color:var(--gray-400)">
+    <span>Eagle=8</span><span>Birdie=4</span><span>Par=2</span><span>Bogey=1</span><span>Double+=0</span>
+    <span style="margin-left:4px">● = stroke hole</span>
+  </div>`;
+
+  return tables + legend;
+}
+
+function showGroupModal(group) {
+  // Remove any existing modal
+  const existing = document.getElementById('group-modal');
+  if (existing) existing.remove();
+
+  const inner = renderGroupScorecard(group);
+  const modal = document.createElement('div');
+  modal.id = 'group-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;z-index:999;
+    background:rgba(0,0,0,0.55);
+    display:flex;align-items:flex-end;justify-content:center;
+  `;
+  modal.innerHTML = `
+    <div style="
+      background:var(--white);width:100%;max-width:520px;
+      border-radius:16px 16px 0 0;
+      max-height:88vh;overflow-y:auto;
+      padding:0 0 24px;
+    ">
+      <div style="
+        display:flex;justify-content:space-between;align-items:center;
+        padding:14px 16px 10px;
+        border-bottom:1px solid var(--gray-200);
+        position:sticky;top:0;background:var(--white);z-index:4;
+      ">
+        <div>
+          <div style="font-size:16px;font-weight:700">${group.groupId}</div>
+          <div style="font-size:12px;color:var(--gray-400)">${group.nine1} + ${group.nine2}</div>
+        </div>
+        <button id="close-modal" style="
+          width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gray-200);
+          background:var(--gray-50);font-size:18px;cursor:pointer;
+          display:flex;align-items:center;justify-content:center;font-weight:300;
+        ">✕</button>
+      </div>
+      <div style="padding:0 12px">${inner}</div>
+    </div>`;
+
+  document.body.appendChild(modal);
+
+  // Close on X button or backdrop tap
+  document.getElementById('close-modal').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
 function renderSkinsTab(allGroups) {

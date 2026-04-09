@@ -521,6 +521,19 @@ function attachListeners() {
     document.getElementById('tab-skins').classList.add('active');
     document.getElementById('tab-standings').classList.remove('active');
   });
+
+  // ── Tap a player row to see their group scorecard ──────────────────────────
+  document.querySelectorAll('[data-open-group]').forEach(row => {
+    row.addEventListener('click', () => {
+      const groupId = row.dataset.openGroup;
+      // Find the group in todayGroups — key may have spaces replaced with underscores
+      const group = Object.values(state.todayGroups).find(g =>
+        g.groupId === groupId ||
+        g.groupId?.replace(/\s/g,'_') === groupId?.replace(/\s/g,'_')
+      );
+      if (group) showGroupModal(group);
+    });
+  });
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
