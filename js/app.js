@@ -79,6 +79,18 @@ const FB = {
   async deleteGroup(date, groupId) {
     await window._dbRemove(window._dbRef(window._db, FB.groupKey(date, groupId)));
   },
+  // Reserve a group slot immediately so other devices see it as taken
+  async claimGroup(date, groupId) {
+    const key = FB.groupKey(date, groupId);
+    // Only write if not already claimed by someone else
+    const snap = await window._dbGet(window._dbRef(window._db, key));
+    if (snap.exists()) return false; // already taken
+    await window._dbSet(window._dbRef(window._db, key), {
+      groupId, claimed: true, claimedAt: Date.now(),
+      nine1: null, nine2: null, players: [], scores: {}
+    });
+    return true;
+  },
   async saveGroupData(date, groupId, data) {
     await window._dbSet(window._dbRef(window._db, FB.groupKey(date, groupId)), data);
   },
@@ -148,16 +160,33 @@ function attachListeners() {
     // Load today's groups so we can filter out already-assigned players and groups
     try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
     // Auto-assign first available group name if current is already taken
+    const allGroupNames = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
     const takenGroups = new Set(
       Object.values(state.todayGroups)
         .filter(g => g.groupId !== state.groupId)
         .map(g => g.groupId)
     );
     if (takenGroups.has(state.groupId)) {
-      const allGroups = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
-      const firstFree = allGroups.find(g => !takenGroups.has(g));
+      const firstFree = allGroupNames.find(g => !takenGroups.has(g));
       if (firstFree) state.groupId = firstFree;
     }
+    // Claim this group in Firebase immediately so other devices see it as taken
+    try {
+      const claimed = await FB.claimGroup(state.date, state.groupId);
+      if (!claimed) {
+        // Someone else just claimed it — find next available
+        await (async () => {
+          state.todayGroups = await FB.loadGroups(state.date);
+          const nowTaken = new Set(Object.values(state.todayGroups).map(g=>g.groupId));
+          const nextFree = allGroupNames.find(g => !nowTaken.has(g));
+          if (nextFree) {
+            state.groupId = nextFree;
+            await FB.claimGroup(state.date, state.groupId);
+          }
+        })();
+      }
+      state.todayGroups = await FB.loadGroups(state.date);
+    } catch(e) { console.warn('Could not claim group:', e); }
     state.screen = 'setup'; render();
   });
   on('btn-resume', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
@@ -289,9 +318,22 @@ function attachListeners() {
   });
 
   // ── Setup ───────────────────────────────────────────────────────────────────
-  on('setup-back', 'click', () => {
+  on('setup-back', 'click', async () => {
     clearInterval(window._setupRefreshTimer);
     window._setupRefreshTimer = null;
+    // Release group claim if no players were added (just a reservation)
+    if (state.groupPlayers.length === 0) {
+      try {
+        const entry = Object.entries(state.todayGroups).find(([k,g]) => g.groupId === state.groupId);
+        if (entry) {
+          const [key, grp] = entry;
+          if (grp.claimed && normalizeArray(grp.players).length === 0) {
+            const path = `${FB.groupsKey(state.date)}/${key}`;
+            await window._dbSet(window._dbRef(window._db, path), null);
+          }
+        }
+      } catch(e) {}
+    }
     state.screen = 'home'; render();
   });
   on('date-input', 'change', async e => {
@@ -300,14 +342,37 @@ function attachListeners() {
     render();
   });
   on('group-select', 'change', async e => {
-    state.groupId = e.target.value;
-    // Re-check who is already in this group — reload from Firebase
+    const newGroupId = e.target.value;
+    // Release old claim and claim new group
     try { state.todayGroups = await FB.loadGroups(state.date); } catch(ex) {}
-    // If selecting a group that already has players saved, warn
-    const existing = Object.values(state.todayGroups).find(g => g.groupId === state.groupId);
-    if (existing && existing.players && normalizeArray(existing.players).length > 0) {
-      showToast(`${state.groupId} already has players — choose another group`);
+    const nowTaken = new Set(
+      Object.values(state.todayGroups)
+        .filter(g => g.groupId !== state.groupId)
+        .map(g => g.groupId)
+    );
+    if (nowTaken.has(newGroupId)) {
+      showToast(`${newGroupId} is already taken — choose another group`);
+      render(); return;
     }
+    // Release old claim if it was just a placeholder (no players yet)
+    const oldEntry = Object.entries(state.todayGroups).find(([k,g]) => g.groupId === state.groupId);
+    if (oldEntry) {
+      const [oldKey, oldGroup] = oldEntry;
+      const oldPlayers = normalizeArray(oldGroup.players);
+      if (oldGroup.claimed && oldPlayers.length === 0) {
+        // Just a reservation — delete it so others can use it
+        try {
+          const path = `${FB.groupsKey(state.date)}/${oldKey}`;
+          await window._dbSet(window._dbRef(window._db, path), null);
+        } catch(ex) {}
+      }
+    }
+    state.groupId = newGroupId;
+    // Claim the new group
+    try {
+      await FB.claimGroup(state.date, state.groupId);
+      state.todayGroups = await FB.loadGroups(state.date);
+    } catch(ex) {}
     render();
   });
   on('add-from-roster', 'click', async () => {

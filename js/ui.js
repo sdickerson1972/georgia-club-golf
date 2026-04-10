@@ -460,9 +460,11 @@ function computePlayerResults(group) {
 
 function renderStandings(allGroups, myGroupId) {
   // Skip invalid/corrupt groups — must have groupId, nine1, nine2 and players
-  // Attach Firebase key to each group so it survives into player results
+  // Skip claimed-only placeholders (no real players yet) and invalid entries
   const validGroups = Object.entries(allGroups || {})
-    .filter(([k, g]) => g && g.groupId && g.nine1 && g.nine2 && g.players && COURSES[g.nine1] && COURSES[g.nine2])
+    .filter(([k, g]) => g && g.groupId && g.nine1 && g.nine2 && g.players &&
+      COURSES[g.nine1] && COURSES[g.nine2] &&
+      normalizeArray(g.players).length > 0)
     .map(([k, g]) => ({ ...g, fbKey: k }));
   const allResults = validGroups.flatMap(g => { try { return computePlayerResults(g); } catch(e) { return []; } });
   allResults.sort((a, b) => b.diff - a.diff || b.pts - a.pts);
