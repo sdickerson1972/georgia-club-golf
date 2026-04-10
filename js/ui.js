@@ -570,6 +570,21 @@ function showGroupModal(group) {
   const existing = document.getElementById('group-modal');
   if (existing) existing.remove();
 
+  // Count total holes played across all players (use max across players)
+  let holesPlayed = 0;
+  try {
+    const { pars } = getRoundArrays(group.nine1, group.nine2);
+    if (group.players && group.scores) {
+      holesPlayed = group.players.reduce((maxH, _, gIdx) => {
+        const ps = group.scores[gIdx] || group.scores[String(gIdx)] || {};
+        const played = pars.filter((_, hIdx) =>
+          parseInt(ps[hIdx] ?? ps[String(hIdx)]) > 0
+        ).length;
+        return Math.max(maxH, played);
+      }, 0);
+    }
+  } catch(e) {}
+
   const inner = renderGroupScorecard(group);
   const modal = document.createElement('div');
   modal.id = 'group-modal';
@@ -592,7 +607,13 @@ function showGroupModal(group) {
         position:sticky;top:0;background:var(--white);z-index:4;
       ">
         <div>
-          <div style="font-size:16px;font-weight:700">${group.groupId}</div>
+          <div style="font-size:16px;font-weight:700">${group.groupId}
+            ${holesPlayed < 18 && holesPlayed > 0
+              ? `<span style="font-size:11px;font-weight:500;color:var(--green);margin-left:6px;background:var(--green-pale);padding:2px 7px;border-radius:20px">${holesPlayed}H in progress</span>`
+              : holesPlayed === 18
+              ? `<span style="font-size:11px;font-weight:500;color:var(--gray-400);margin-left:6px;background:var(--gray-100);padding:2px 7px;border-radius:20px">Complete</span>`
+              : ''}
+          </div>
           <div style="font-size:12px;color:var(--gray-400)">${group.nine1} + ${group.nine2}</div>
         </div>
         <button id="close-modal" style="
@@ -615,26 +636,33 @@ function renderSkinsTab(allGroups) {
   const entries = Object.values(allGroups || {});
   if (entries.length === 0) return `<div class="empty-state">No groups posted yet.</div>`;
 
-  return entries.map(group => {
-    if (!group.players || group.players.length < 2) return '';
-    if (!group.nine1 || !group.nine2 || !COURSES[group.nine1] || !COURSES[group.nine2]) return '';
+  // Merge all groups playing the same nines combination
+  let mergedGroups = [];
+  try { mergedGroups = mergeGroupsByNines(allGroups); } catch(e) { console.error('Merge error:', e); return `<div class="empty-state">Error computing skins.</div>`; }
+  if (mergedGroups.length === 0) return `<div class="empty-state">No valid groups found.</div>`;
+
+  return mergedGroups.map(merged => {
+    if (!merged.players || merged.players.length < 2) return '';
     let skins = [];
-    try { skins = computeSkins(group); } catch(e) { console.error('Skins error:', e); }
+    try { skins = computeSkins(merged); } catch(e) { console.error('Skins error:', e); }
     const summary = skinsSummary(skins);
     const summaryStr = Object.keys(summary).length > 0
       ? Object.entries(summary).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}: ${c}`).join(' · ')
       : '';
 
-    // Sort skins by overall handicap number (1 = hardest = first)
+    // Sort by overall handicap (hardest hole first)
     const sortedSkins = skins.slice().sort((a, b) => a.overallHdcp - b.overallHdcp);
 
+    // List all player names and groups in this nines combo
+    const groupNames = [...new Set(merged.players.map(p => p.groupId).filter(Boolean))].join(', ');
+
     const skinRows = sortedSkins.length === 0
-      ? `<div class="no-skins">No skins yet — tied holes or incomplete scores</div>`
+      ? `<div class="no-skins">No skins yet — ties or incomplete scores</div>`
       : sortedSkins.map(s => `
           <div class="skin-row">
             <div>
               <div class="skin-hole">Hole ${s.hole} <span style="font-size:12px;font-weight:400;color:var(--gray-400)">Par ${s.par} · Hcp ${s.overallHdcp} · ${s.nineLabel}</span></div>
-              <div class="skin-info">${s.usedStroke ? 'Net score used' : 'Outright win'}</div>
+              <div class="skin-info">${s.usedStroke ? 'Net score used' : 'Outright win'}${s.groupId ? ` · <span style="color:var(--gray-400)">${s.groupId}</span>` : ''}</div>
             </div>
             <div class="skin-winner">
               <div class="name">${s.winner}</div>
@@ -644,8 +672,9 @@ function renderSkinsTab(allGroups) {
 
     return `
       <div class="skins-group-header">
-        ${group.groupId} — ${group.nine1} + ${group.nine2}
-        ${summaryStr ? `<span style="font-weight:400;text-transform:none;font-size:11px;margin-left:8px">${summaryStr}</span>` : ''}
+        ${merged.nine1} + ${merged.nine2}
+        <span style="font-weight:400;text-transform:none;font-size:11px;margin-left:6px;color:var(--gray-400)">${groupNames}</span>
+        ${summaryStr ? `<div style="font-size:11px;font-weight:400;text-transform:none;margin-top:2px">${summaryStr}</div>` : ''}
       </div>
       ${skinRows}`;
   }).join('');
