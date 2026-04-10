@@ -289,15 +289,44 @@ function attachListeners() {
   });
 
   // ── Setup ───────────────────────────────────────────────────────────────────
-  on('setup-back', 'click', () => { state.screen = 'home'; render(); });
-  on('date-input', 'change', e => { state.date = e.target.value; });
-  on('group-select', 'change', e => { state.groupId = e.target.value; });
-  on('add-from-roster', 'click', () => {
+  on('setup-back', 'click', () => {
+    clearInterval(window._setupRefreshTimer);
+    window._setupRefreshTimer = null;
+    state.screen = 'home'; render();
+  });
+  on('date-input', 'change', async e => {
+    state.date = e.target.value;
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(ex) { state.todayGroups = {}; }
+    render();
+  });
+  on('group-select', 'change', async e => {
+    state.groupId = e.target.value;
+    // Re-check who is already in this group — reload from Firebase
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(ex) {}
+    // If selecting a group that already has players saved, warn
+    const existing = Object.values(state.todayGroups).find(g => g.groupId === state.groupId);
+    if (existing && existing.players && normalizeArray(existing.players).length > 0) {
+      showToast(`${state.groupId} already has players — choose another group`);
+    }
+    render();
+  });
+  on('add-from-roster', 'click', async () => {
     const sel = document.getElementById('roster-pick');
     if (!sel) return;
     const p = state.roster.find(r => r.id === sel.value);
     if (!p || state.groupPlayers.length >= 5) return;
     if (state.groupPlayers.find(gp => gp.rosterId === p.id)) { showToast(`${p.name} already added`); return; }
+    // Re-check Firebase to see if player was just added to another group
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(ex) {}
+    const takenInOther = Object.values(state.todayGroups).find(g =>
+      g.groupId !== state.groupId &&
+      normalizeArray(g.players).some(gp => gp.rosterId === p.id)
+    );
+    if (takenInOther) {
+      showToast(`${p.name} is already in ${takenInOther.groupId}`);
+      render(); // refresh the list to show updated taken players
+      return;
+    }
     state.groupPlayers.push({ rosterId: p.id, name: p.name, hdcp: p.hdcp, tee: p.tee });
     saveSession();
     render();
@@ -336,7 +365,29 @@ function attachListeners() {
     saveSession();
     render();
   }));
+  // Periodically refresh todayGroups while on setup so taken groups/players stay current
+  if (!window._setupRefreshTimer) {
+    window._setupRefreshTimer = setInterval(async () => {
+      if (state.screen === 'setup') {
+        try {
+          const fresh = await FB.loadGroups(state.date);
+          // Only re-render if something changed
+          if (JSON.stringify(fresh) !== JSON.stringify(state.todayGroups)) {
+            state.todayGroups = fresh;
+            render();
+          }
+        } catch(e) {}
+      } else {
+        // Clear timer when not on setup screen
+        clearInterval(window._setupRefreshTimer);
+        window._setupRefreshTimer = null;
+      }
+    }, 15000); // refresh every 15 seconds
+  }
+
   on('start-round', 'click', () => {
+    clearInterval(window._setupRefreshTimer);
+    window._setupRefreshTimer = null;
     state.scores = {};
     saveSession();
     state.screen = 'scoring'; render();

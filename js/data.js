@@ -88,6 +88,13 @@ function getRoundArrays(nine1, nine2) {
   return { pars, hdcps };
 }
 
+// Normalize Firebase arrays — Firebase stores arrays as objects {"0":{...},"1":{...}}
+function normalizeArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return Object.keys(val).sort((a,b)=>parseInt(a)-parseInt(b)).map(k=>val[k]);
+}
+
 // Today's date string YYYY-MM-DD in local time (not UTC)
 function todayStr() {
   const d = new Date();

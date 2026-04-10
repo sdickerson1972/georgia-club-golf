@@ -423,13 +423,6 @@ function renderScoring(state) {
 }
 
 // ── Leaderboard ────────────────────────────────────────────────────────────────
-function normalizeArray(val) {
-  // Firebase returns arrays as objects {"0":{...},"1":{...}} — convert back to array
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  return Object.keys(val).sort((a,b)=>parseInt(a)-parseInt(b)).map(k => val[k]);
-}
-
 function computePlayerResults(group) {
   try {
   const { nine1, nine2, groupId } = group;
