@@ -88,7 +88,11 @@ function getRoundArrays(nine1, nine2) {
   return { pars, hdcps };
 }
 
-// Today's date string YYYY-MM-DD
+// Today's date string YYYY-MM-DD in local time (not UTC)
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const yr  = d.getFullYear();
+  const mo  = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${day}`;
 }

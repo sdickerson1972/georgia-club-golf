@@ -247,8 +247,22 @@ function renderSetup(state, roster) {
         <div class="field" style="max-width:150px">
           <label class="field-label">Group</label>
           <select id="group-select">
-            ${['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8']
-              .map(g=>`<option ${groupId===g?'selected':''}>${g}</option>`).join('')}
+            ${(() => {
+              // Build set of group names already taken by OTHER active groups today
+              const takenGroups = new Set(
+                Object.values(todayGroups || {})
+                  .filter(g => g.groupId !== groupId)
+                  .map(g => g.groupId)
+              );
+              const allGroups = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
+              // Auto-select first available group if current groupId is taken
+              const available = allGroups.filter(g => !takenGroups.has(g));
+              return allGroups.map(g => {
+                const taken = takenGroups.has(g);
+                const selected = groupId === g || (!takenGroups.has(groupId) ? groupId === g : g === available[0]);
+                return `<option ${selected?'selected':''} ${taken?'disabled':''} style="${taken?'color:var(--gray-400)':''}">${g}${taken?' (taken)':''}</option>`;
+              }).join('');
+            })()}
           </select>
         </div>
       </div>

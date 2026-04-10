@@ -145,8 +145,19 @@ function attachListeners() {
   // ── Home ────────────────────────────────────────────────────────────────────
   on('btn-score', 'click', async () => {
     stopLbListener();
-    // Load today's groups so we can filter out already-assigned players
-    state.todayGroups = await FB.loadGroups(state.date);
+    // Load today's groups so we can filter out already-assigned players and groups
+    try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+    // Auto-assign first available group name if current is already taken
+    const takenGroups = new Set(
+      Object.values(state.todayGroups)
+        .filter(g => g.groupId !== state.groupId)
+        .map(g => g.groupId)
+    );
+    if (takenGroups.has(state.groupId)) {
+      const allGroups = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
+      const firstFree = allGroups.find(g => !takenGroups.has(g));
+      if (firstFree) state.groupId = firstFree;
+    }
     state.screen = 'setup'; render();
   });
   on('btn-resume', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
