@@ -237,9 +237,11 @@ function attachListeners() {
       const fbKey = btn.dataset.deleteFbKey;
       const group = state.todayGroups[fbKey] || {};
       const label = group.groupId || fbKey || 'this group';
-      if (!confirm(`Delete ${label} and all their scores? This cannot be undone.`)) return;
+      const path = `${FB.groupsKey(state.date)}/${fbKey}`;
+      if (!confirm(`Delete ${label}?\nFirebase path: ${path}\n\nThis cannot be undone.`)) return;
       try {
-        const path = `rounds/${state.date.replace(/\//g,'-')}/${fbKey}`;
+        // Use FB.groupsKey so path is always consistent with how groups are saved
+        const path = `${FB.groupsKey(state.date)}/${fbKey}`;
         console.log('Deleting at path:', path);
         await window._dbSet(window._dbRef(window._db, path), null);
         showToast(`${label} deleted`);
@@ -275,7 +277,7 @@ function attachListeners() {
           newScores[newIdx] = group.scores?.[oldIdx] || group.scores?.[String(oldIdx)] || {};
           newIdx++;
         });
-        const path = `rounds/${state.date.replace(/\//g,'-')}/${fbKey}`;
+        const path = `${FB.groupsKey(state.date)}/${fbKey}`;
         await window._dbSet(window._dbRef(window._db, path), {
           ...group, players: newPlayers, scores: newScores, updatedAt: Date.now()
         });
