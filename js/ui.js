@@ -458,6 +458,7 @@ function computePlayerResults(group) {
       name: p.name, hdcp: p.hdcp, tee: p.tee,
       total, pts, target, diff: pts - target,
       holesPlayed, playedPar, totalPar, groupId,
+      fbKey: group.fbKey || '',
       hScores, pars, hdcps
     };
   });
@@ -466,9 +467,10 @@ function computePlayerResults(group) {
 
 function renderStandings(allGroups, myGroupId) {
   // Skip invalid/corrupt groups — must have groupId, nine1, nine2 and players
-  const validGroups = Object.values(allGroups || {}).filter(g =>
-    g && g.groupId && g.nine1 && g.nine2 && g.players && COURSES[g.nine1] && COURSES[g.nine2]
-  );
+  // Attach Firebase key to each group so it survives into player results
+  const validGroups = Object.entries(allGroups || {})
+    .filter(([k, g]) => g && g.groupId && g.nine1 && g.nine2 && g.players && COURSES[g.nine1] && COURSES[g.nine2])
+    .map(([k, g]) => ({ ...g, fbKey: k }));
   const allResults = validGroups.flatMap(g => { try { return computePlayerResults(g); } catch(e) { return []; } });
   allResults.sort((a, b) => b.diff - a.diff || b.pts - a.pts);
 
@@ -490,8 +492,9 @@ function renderStandings(allGroups, myGroupId) {
     const isMine    = p.groupId === myGroupId;
     const holesStr  = p.holesPlayed < 18 ? ` (${p.holesPlayed}H)` : '';
     const gidSafe   = (p.groupId || '').replace(/"/g, '&quot;');
+    const fbKeySafe = (p.fbKey || '').replace(/"/g, '&quot;');
     return `
-      <div class="lb-row ${isMine ? 'lb-mine' : ''}" data-open-group="${gidSafe}"
+      <div class="lb-row ${isMine ? 'lb-mine' : ''}" data-open-group="${gidSafe}" data-fb-key="${fbKeySafe}"
            style="cursor:pointer">
         <div class="lb-rank ${rankClass(i)}">${i+1}</div>
         <div>

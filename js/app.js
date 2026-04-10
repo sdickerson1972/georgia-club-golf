@@ -539,22 +539,34 @@ function attachListeners() {
   });
 
   // ── Tap a player row to see their group scorecard ──────────────────────────
-  document.querySelectorAll('[data-open-group]').forEach(row => {
-    row.addEventListener('click', () => {
+  // Use event delegation on the app root so it works even after live Firebase
+  // updates replace pane-standings innerHTML without re-running attachListeners
+  const appEl = document.getElementById('app');
+  if (appEl && !appEl._scoreModalDelegated) {
+    appEl._scoreModalDelegated = true;
+    appEl.addEventListener('click', e => {
+      const row = e.target.closest('[data-open-group]');
+      if (!row) return;
+      const fbKey   = row.dataset.fbKey;
       const groupId = row.dataset.openGroup;
-      // Normalize for comparison — Firebase keys use underscores for spaces
+      // Try direct Firebase key lookup first (most reliable), then fall back to groupId match
       const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
-      const group = Object.values(state.todayGroups).find(g =>
-        normalize(g.groupId) === normalize(groupId)
-      );
+      let group = fbKey ? state.todayGroups[fbKey] : null;
+      if (!group) {
+        group = Object.values(state.todayGroups).find(g =>
+          normalize(g.groupId) === normalize(groupId)
+        );
+      }
       if (group) {
         showGroupModal(group);
       } else {
-        console.warn('Group not found:', groupId, 'available:', Object.values(state.todayGroups).map(g=>g.groupId));
-        showToast('Could not load scorecard — try refreshing');
+        console.warn('Group not found. fbKey:', fbKey, 'groupId:', groupId,
+          'available keys:', Object.keys(state.todayGroups),
+          'available groupIds:', Object.values(state.todayGroups).map(g=>g.groupId));
+        showToast('Could not load scorecard — try refreshing the leaderboard');
       }
     });
-  });
+  }
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
