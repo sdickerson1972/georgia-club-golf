@@ -537,12 +537,17 @@ function attachListeners() {
   document.querySelectorAll('[data-open-group]').forEach(row => {
     row.addEventListener('click', () => {
       const groupId = row.dataset.openGroup;
-      // Find the group in todayGroups — key may have spaces replaced with underscores
+      // Normalize for comparison — Firebase keys use underscores for spaces
+      const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
       const group = Object.values(state.todayGroups).find(g =>
-        g.groupId === groupId ||
-        g.groupId?.replace(/\s/g,'_') === groupId?.replace(/\s/g,'_')
+        normalize(g.groupId) === normalize(groupId)
       );
-      if (group) showGroupModal(group);
+      if (group) {
+        showGroupModal(group);
+      } else {
+        console.warn('Group not found:', groupId, 'available:', Object.values(state.todayGroups).map(g=>g.groupId));
+        showToast('Could not load scorecard — try refreshing');
+      }
     });
   });
 }

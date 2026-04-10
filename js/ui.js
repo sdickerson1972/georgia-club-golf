@@ -414,9 +414,18 @@ function renderScoring(state) {
 }
 
 // ── Leaderboard ────────────────────────────────────────────────────────────────
+function normalizeArray(val) {
+  // Firebase returns arrays as objects {"0":{...},"1":{...}} — convert back to array
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return Object.keys(val).sort((a,b)=>parseInt(a)-parseInt(b)).map(k => val[k]);
+}
+
 function computePlayerResults(group) {
   try {
-  const { nine1, nine2, players, scores, groupId } = group;
+  const { nine1, nine2, groupId } = group;
+  const players = normalizeArray(group.players);
+  const scores  = group.scores || {};
   if (!players || !nine1 || !nine2 || !COURSES[nine1] || !COURSES[nine2]) return [];
   const { pars, hdcps } = getRoundArrays(nine1, nine2);
   const totalPar = pars.reduce((a,b)=>a+b,0);
@@ -487,8 +496,11 @@ function renderStandings(allGroups, myGroupId) {
 
 // ── Group scorecard modal ──────────────────────────────────────────────────────
 function renderGroupScorecard(group) {
-  if (!group || !group.players || !group.nine1 || !group.nine2) return '<p>No data.</p>';
-  const { nine1, nine2, players, scores } = group;
+  if (!group || !group.nine1 || !group.nine2) return '<p>No data.</p>';
+  const { nine1, nine2 } = group;
+  const players = normalizeArray(group.players);
+  const scores  = group.scores || {};
+  if (!players.length) return '<p>No players.</p>';
   if (!COURSES[nine1] || !COURSES[nine2]) return '<p>Unknown course.</p>';
 
   const nines = [nine1, nine2];
@@ -588,8 +600,9 @@ function showGroupModal(group) {
   let holesPlayed = 0;
   try {
     const { pars } = getRoundArrays(group.nine1, group.nine2);
-    if (group.players && group.scores) {
-      holesPlayed = group.players.reduce((maxH, _, gIdx) => {
+    const modalPlayers = normalizeArray(group.players);
+    if (modalPlayers.length && group.scores) {
+      holesPlayed = modalPlayers.reduce((maxH, _, gIdx) => {
         const ps = group.scores[gIdx] || group.scores[String(gIdx)] || {};
         const played = pars.filter((_, hIdx) =>
           parseInt(ps[hIdx] ?? ps[String(hIdx)]) > 0
