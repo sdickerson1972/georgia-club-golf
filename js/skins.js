@@ -22,12 +22,13 @@ function mergeGroupsByNines(allGroups) {
 
   Object.values(allGroups || {}).forEach(group => {
     const { nine1, nine2 } = group;
+    if (!nine1 || !nine2 || !COURSES[nine1] || !COURSES[nine2]) return;
     // Firebase may return arrays as objects — normalize
     const players = Array.isArray(group.players)
       ? group.players
       : Object.keys(group.players || {}).sort((a,b)=>parseInt(a)-parseInt(b)).map(k=>(group.players||{})[k]);
     const scores = group.scores || {};
-    if (!players || !players.length || !nine1 || !nine2) return;
+    if (!players || !players.length) return;
     if (!COURSES[nine1] || !COURSES[nine2]) return;
 
     const key = `${nine1}|${nine2}`;

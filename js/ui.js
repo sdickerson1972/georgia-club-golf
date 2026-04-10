@@ -107,26 +107,35 @@ function renderAdmin(roster, todayGroups) {
           <button class="btn btn-xs btn-danger" data-del="${i}">✕</button>
         </div>`).join('');
 
-  // Today's active groups
-  const groups = Object.values(todayGroups || {});
-  const groupsHtml = groups.length === 0
+  // Today's active groups — use Object.entries to keep Firebase key for deletion
+  const groupEntries = Object.entries(todayGroups || {});
+  const groupsHtml = groupEntries.length === 0
     ? '<p style="color:var(--gray-400);font-size:13px">No groups active today.</p>'
-    : groups.map(group => {
-        const playerRows = (group.players || []).map((p, pIdx) => `
+    : groupEntries.map(([fbKey, group]) => {
+        const players = normalizeArray(group.players);
+        const label   = group.groupId || fbKey || 'Unknown';
+        const nines   = (group.nine1 && group.nine2) ? `${group.nine1} + ${group.nine2}` : 'No nines set';
+        const isValid = group.nine1 && group.nine2 && players.length > 0;
+
+        const playerRows = players.map((p, pIdx) => `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--gray-100)">
-            <span style="font-size:13px">${teeDot(p.tee)}${p.name} <span style="color:var(--gray-400);font-size:11px">H${p.hdcp}</span></span>
-            <button class="btn btn-xs btn-danger" data-remove-player="${pIdx}" data-group-id="${group.groupId}">Remove</button>
+            <span style="font-size:13px">${teeDot(p.tee||'White')}${p.name||'Unknown'} <span style="color:var(--gray-400);font-size:11px">H${p.hdcp||0}</span></span>
+            <button class="btn btn-xs btn-danger" data-remove-player="${pIdx}" data-fb-key="${fbKey}">Remove</button>
           </div>`).join('');
+
         return `
-          <div style="margin-bottom:12px;border:1px solid var(--gray-200);border-radius:var(--radius-md);overflow:hidden">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--gray-50)">
-              <span style="font-weight:700;font-size:14px">${group.groupId}</span>
+          <div style="margin-bottom:12px;border:1px solid ${isValid?'var(--gray-200)':'#ef9a9a'};border-radius:var(--radius-md);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:${isValid?'var(--gray-50)':'var(--red-pale)'}">
+              <div>
+                <span style="font-weight:700;font-size:14px">${label}</span>
+                ${!isValid?`<span style="font-size:11px;color:var(--red-text);margin-left:6px">invalid entry</span>`:''}
+              </div>
               <div style="display:flex;gap:6px;align-items:center">
-                <span style="font-size:12px;color:var(--gray-400)">${group.nine1} + ${group.nine2}</span>
-                <button class="btn btn-xs btn-danger" data-delete-group="${group.groupId}">Delete Group</button>
+                <span style="font-size:12px;color:var(--gray-400)">${nines}</span>
+                <button class="btn btn-xs btn-danger" data-delete-fb-key="${fbKey}">Delete</button>
               </div>
             </div>
-            <div style="padding:4px 12px 8px">${playerRows}</div>
+            <div style="padding:4px 12px 8px">${playerRows||'<p style="font-size:12px;color:var(--gray-400);padding:4px 0">No players</p>'}</div>
           </div>`;
       }).join('');
 
@@ -456,7 +465,11 @@ function computePlayerResults(group) {
 }
 
 function renderStandings(allGroups, myGroupId) {
-  const allResults = Object.values(allGroups || {}).flatMap(g => { try { return computePlayerResults(g); } catch(e) { return []; } });
+  // Skip invalid/corrupt groups — must have groupId, nine1, nine2 and players
+  const validGroups = Object.values(allGroups || {}).filter(g =>
+    g && g.groupId && g.nine1 && g.nine2 && g.players && COURSES[g.nine1] && COURSES[g.nine2]
+  );
+  const allResults = validGroups.flatMap(g => { try { return computePlayerResults(g); } catch(e) { return []; } });
   allResults.sort((a, b) => b.diff - a.diff || b.pts - a.pts);
 
   if (allResults.length === 0) {

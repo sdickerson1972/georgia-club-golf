@@ -231,52 +231,55 @@ function attachListeners() {
     }
   });
 
-  // ── Delete entire group ────────────────────────────────────────────────────
-  document.querySelectorAll('[data-delete-group]').forEach(btn => {
+  // ── Delete entire group — uses Firebase key directly ──────────────────────
+  document.querySelectorAll('[data-delete-fb-key]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const groupId = btn.dataset.deleteGroup;
-      if (!confirm(`Delete ${groupId} and all their scores? This cannot be undone.`)) return;
+      const fbKey = btn.dataset.deleteFbKey;
+      const group = state.todayGroups[fbKey] || {};
+      const label = group.groupId || fbKey || 'this group';
+      if (!confirm(`Delete ${label} and all their scores? This cannot be undone.`)) return;
       try {
-        // Build the exact path key used when saving
-        const pathKey = FB.groupKey(state.date, groupId);
-        console.log('Deleting group at path:', pathKey);
-        const groupRef = window._dbRef(window._db, pathKey);
-        // Set to null is the Firebase way to delete a node
-        await window._dbSet(groupRef, null);
-        showToast(`${groupId} deleted`);
+        const path = `rounds/${state.date.replace(/\//g,'-')}/${fbKey}`;
+        console.log('Deleting at path:', path);
+        await window._dbSet(window._dbRef(window._db, path), null);
+        showToast(`${label} deleted`);
         state.todayGroups = await FB.loadGroups(state.date);
         render();
       } catch(e) {
         const msg = e?.message || e?.code || String(e);
         showToast('Delete failed: ' + msg.slice(0, 80));
-        console.error('Delete group error:', e);
+        console.error('Delete error:', e);
       }
     });
   });
 
-  // ── Remove player from a group ─────────────────────────────────────────────
-  document.querySelectorAll('[data-remove-player]').forEach(btn => {
+  // ── Remove player from a group — uses Firebase key directly ───────────────
+  document.querySelectorAll('[data-remove-player][data-fb-key]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const pIdx   = parseInt(btn.dataset.removePlayer);
-      const groupId = btn.dataset.groupId;
-      const group  = Object.values(state.todayGroups).find(g => g.groupId === groupId);
+      const pIdx  = parseInt(btn.dataset.removePlayer);
+      const fbKey = btn.dataset.fbKey;
+      const group = state.todayGroups[fbKey];
       if (!group) return;
-      const playerName = group.players[pIdx]?.name || 'Player';
-      if (!confirm(`Remove ${playerName} from ${groupId}?`)) return;
+      const players = Array.isArray(group.players)
+        ? group.players
+        : Object.keys(group.players||{}).sort((a,b)=>parseInt(a)-parseInt(b)).map(k=>(group.players||{})[k]);
+      const playerName = players[pIdx]?.name || 'Player';
+      const groupLabel = group.groupId || fbKey;
+      if (!confirm(`Remove ${playerName} from ${groupLabel}?`)) return;
       try {
-        // Remove player and their scores from the group
-        const newPlayers = group.players.filter((_, i) => i !== pIdx);
-        // Rebuild scores — remove the index and rekey remaining players
+        const newPlayers = players.filter((_, i) => i !== pIdx);
         const newScores = {};
         let newIdx = 0;
-        group.players.forEach((_, oldIdx) => {
+        players.forEach((_, oldIdx) => {
           if (oldIdx === pIdx) return;
           newScores[newIdx] = group.scores?.[oldIdx] || group.scores?.[String(oldIdx)] || {};
           newIdx++;
         });
-        const updatedGroup = { ...group, players: newPlayers, scores: newScores, updatedAt: Date.now() };
-        await window._dbSet(window._dbRef(window._db, FB.groupKey(state.date, groupId)), updatedGroup);
-        showToast(`${playerName} removed from ${groupId}`);
+        const path = `rounds/${state.date.replace(/\//g,'-')}/${fbKey}`;
+        await window._dbSet(window._dbRef(window._db, path), {
+          ...group, players: newPlayers, scores: newScores, updatedAt: Date.now()
+        });
+        showToast(`${playerName} removed from ${groupLabel}`);
         state.todayGroups = await FB.loadGroups(state.date);
         render();
       } catch(e) { showToast('Remove failed: ' + (e?.message||e)); console.error(e); }
