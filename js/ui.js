@@ -326,11 +326,14 @@ function renderSetup(state, roster) {
 
 // ── Scorecard nine table ───────────────────────────────────────────────────────
 // Layout: players down LEFT, all 9 holes across TOP, horizontally scrollable
-function renderNineTable(nine, nineIdx, groupPlayers, scores) {
+// Pass nine1Name when rendering the second nine to show grand total columns
+function renderNineTable(nine, nineIdx, groupPlayers, scores, nine1Name) {
   const C = COURSES[nine];
   const overallHdcps = C.hdcp.map(h => getOverallHdcp(nineIdx, h));
+  const showGT = nineIdx === 1 && nine1Name && COURSES[nine1Name];
+  const C1 = showGT ? COURSES[nine1Name] : null;
 
-  // ── Column headers — all 9 holes
+  // ── Column headers — all 9 holes (+ grand total cols for nine 2)
   const holeHeaders = C.par.map((par, hIdx) => {
     const gh = nineIdx * 9 + hIdx;
     const oh = overallHdcps[hIdx];
@@ -340,6 +343,16 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
       <div style="font-size:12px;color:var(--gray-400)">H${oh}</div>
     </th>`;
   }).join('');
+
+  const gtHeaders = showGT ? `
+    <th style="min-width:44px;background:var(--gray-100);border-left:2px solid var(--gray-300)">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-600)">Total</div>
+      <div style="font-size:10px;color:var(--gray-400)">Score</div>
+    </th>
+    <th style="min-width:44px;background:var(--green-pale);border-left:1px solid var(--gray-200)">
+      <div style="font-size:11px;font-weight:700;color:var(--green)">Total</div>
+      <div style="font-size:10px;color:var(--green)">Pts</div>
+    </th>` : '';
 
   // ── One row per player
   const playerRows = groupPlayers.map((p, gIdx) => {
@@ -368,6 +381,23 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
       if (s) { nineTotal += s; ninePts += getPoints(s, par) || 0; }
     });
 
+    // Grand total columns — only on second nine
+    let gtCols = '';
+    if (showGT) {
+      let gtTotal = 0, gtPts = 0;
+      C1.par.forEach((par, hIdx) => {
+        const s = parseInt((scores[gIdx]||[])[hIdx]);
+        if (s) { gtTotal += s; gtPts += getPoints(s, par) || 0; }
+      });
+      C.par.forEach((par, hIdx) => {
+        const s = parseInt((scores[gIdx]||[])[9+hIdx]);
+        if (s) { gtTotal += s; gtPts += getPoints(s, par) || 0; }
+      });
+      gtCols = `
+        <td id="sc-tot-${gIdx}" style="font-weight:800;font-size:15px;background:var(--gray-100);padding:4px 6px;border-left:2px solid var(--gray-300)">${gtTotal||''}</td>
+        <td id="sc-pts-${gIdx}" style="font-weight:800;font-size:15px;color:var(--green);background:var(--green-pale);padding:4px 6px;border-left:1px solid var(--gray-200)">${gtPts}</td>`;
+    }
+
     return `
       <tr>
         <td style="text-align:left;padding-left:8px;white-space:nowrap;min-width:80px">
@@ -380,6 +410,7 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
         ${scoreCells}
         <td id="tot-${nineIdx}-${gIdx}" style="font-weight:700;font-size:14px;background:var(--gray-50);padding:4px 5px">${nineTotal||''}</td>
         <td id="pts-${nineIdx}-${gIdx}" style="font-weight:700;font-size:14px;color:var(--green);background:var(--green-pale);padding:4px 5px">${ninePts}</td>
+        ${gtCols}
       </tr>`;
   }).join('');
 
@@ -388,6 +419,7 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
     <span class="sc-nine-stripe" style="background:${C.color}"></span>
     <span style="font-size:14px;font-weight:700;color:${C.color}">${C.name}</span>
     <span style="font-size:12px;color:var(--gray-400);margin-left:4px">par ${C.par.reduce((a,b)=>a+b,0)}</span>
+    ${showGT ? `<span style="font-size:12px;font-weight:600;color:var(--gray-600);margin-left:auto;padding-right:4px">↔ scroll for totals</span>` : ''}
   </div>
   <div class="sc-wrap">
     <table class="scorecard">
@@ -397,6 +429,7 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
           ${holeHeaders}
           <th style="min-width:40px">Tot</th>
           <th style="min-width:40px">Pts</th>
+          ${gtHeaders}
         </tr>
       </thead>
       <tbody>${playerRows}</tbody>
@@ -476,8 +509,7 @@ function renderScoring(state) {
   <div class="content">
     ${renderNineTable(nine1, 0, groupPlayers, scores)}
     <div class="divider" style="margin:8px 12px"></div>
-    ${renderNineTable(nine2, 1, groupPlayers, scores)}
-    ${renderGrandTotals(nine1, nine2, groupPlayers, scores, 'sc')}
+    ${renderNineTable(nine2, 1, groupPlayers, scores, nine1)}
     <div style="padding:12px;display:flex;gap:8px">
       <button class="btn" id="scoring-back" style="flex:1">← Setup</button>
       <button class="btn btn-primary" id="save-lb-btn" style="flex:2">Save & View Leaderboard</button>
