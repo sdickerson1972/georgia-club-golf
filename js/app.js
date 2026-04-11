@@ -375,6 +375,27 @@ function attachListeners() {
     } catch(ex) {}
     render();
   });
+  on('add-guest', 'click', async () => {
+    const name = document.getElementById('guest-name')?.value.trim() || '';
+    const hdcp = parseInt(document.getElementById('guest-hdcp')?.value) || 0;
+    const tee  = document.getElementById('guest-tee')?.value || 'White';
+    if (!name) { showToast('Enter a guest name'); return; }
+    if (state.groupPlayers.length >= 5) { showToast('Group is full (5 players max)'); return; }
+    // Check name not already in group
+    if (state.groupPlayers.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+      showToast(`${name} is already in the group`); return;
+    }
+    // Guests have no rosterId so they won't be filtered as "taken" for other groups
+    state.groupPlayers.push({ rosterId: null, name, hdcp, tee, isGuest: true });
+    saveSession();
+    // Clear guest fields
+    const gn = document.getElementById('guest-name');
+    const gh = document.getElementById('guest-hdcp');
+    if (gn) gn.value = '';
+    if (gh) gh.value = '';
+    render();
+  });
+
   on('add-from-roster', 'click', async () => {
     const sel = document.getElementById('roster-pick');
     if (!sel) return;
@@ -527,6 +548,18 @@ function attachListeners() {
     const ptsCell = document.getElementById(`pts-${nineIdx}-${gIdx}`);
     if (totCell) totCell.textContent = total || '';
     if (ptsCell) ptsCell.textContent = pts;
+
+    // Also update grand total cells
+    const C1 = COURSES[state.nine1], C2 = COURSES[state.nine2];
+    let gtTotal = 0, gtPts = 0;
+    [...C1.par, ...C2.par].forEach((par, hIdx) => {
+      const s = parseInt((state.scores[gIdx] || [])[hIdx]) || 0;
+      if (s) { gtTotal += s; gtPts += getPoints(s, par) || 0; }
+    });
+    const gtTot = document.getElementById(`sc-tot-${gIdx}`);
+    const gtPt  = document.getElementById(`sc-pts-${gIdx}`);
+    if (gtTot) gtTot.textContent = gtTotal || '';
+    if (gtPt)  gtPt.textContent  = gtPts;
   }
 
   document.querySelectorAll('.score-input').forEach(inp => {

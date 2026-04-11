@@ -216,7 +216,8 @@ function renderSetup(state, roster) {
 
   const playerRows = groupPlayers.map((p, i) => `
     <div class="player-setup-row">
-      <span style="font-size:14px;font-weight:600">${p.name}</span>
+      <span style="font-size:13px;font-weight:600">${p.name}${p.isGuest?` <span style="font-size:10px;background:var(--gold-pale);color:#7a5c00;border-radius:20px;padding:1px 6px;font-weight:500">Guest</span>`:''}
+      </span>
       <input type="number" min="0" max="54" value="${p.hdcp}" data-gp="${i}" data-field="hdcp" style="height:36px;font-size:13px"/>
       <select data-gp="${i}" data-field="tee" style="height:36px;font-size:13px">
         ${['White','Silver','Black'].map(t=>`<option ${p.tee===t?'selected':''}>${t}</option>`).join('')}
@@ -296,9 +297,21 @@ function renderSetup(state, roster) {
            ${takenNote}`}
     </div>
 
+    <div class="section">
+      <div class="section-label">Add a Guest <span style="font-size:11px;font-weight:400;color:var(--gray-400)">— not added to roster</span></div>
+      <div style="display:grid;grid-template-columns:1fr 54px 90px;gap:6px;margin-bottom:8px">
+        <input type="text" id="guest-name" placeholder="Guest name" ${groupPlayers.length>=5?'disabled':''}/>
+        <input type="number" id="guest-hdcp" placeholder="Hdcp" min="0" max="54" ${groupPlayers.length>=5?'disabled':''}/>
+        <select id="guest-tee" ${groupPlayers.length>=5?'disabled':''}>
+          <option>White</option><option>Silver</option><option>Black</option>
+        </select>
+      </div>
+      <button class="btn btn-sm" id="add-guest" ${groupPlayers.length>=5?'disabled':''} style="background:var(--gold-pale);border-color:var(--gold);color:#7a5c00">+ Add Guest</button>
+    </div>
+
     ${groupPlayers.length > 0 ? `
     <div class="section">
-      <div class="section-label">Group Players (${groupPlayers.length}/5) — adjust hdcp/tees if needed</div>
+      <div class="section-label">Group Players (${groupPlayers.length}/5)</div>
       <div class="col-headers"><span>Name</span><span style="text-align:center">Hdcp</span><span>Tees</span><span></span></div>
       ${playerRows}
     </div>` : ''}
@@ -391,6 +404,58 @@ function renderNineTable(nine, nineIdx, groupPlayers, scores) {
   </div>`;
 }
 
+// ── Grand total row after both nines ──────────────────────────────────────────
+function renderGrandTotals(nine1, nine2, groupPlayers, scores, idPrefix) {
+  const C1 = COURSES[nine1], C2 = COURSES[nine2];
+  const prefix = idPrefix || 'gt';
+
+  const cols = groupPlayers.map((p, gIdx) => {
+    let total = 0, pts = 0;
+    // Nine 1
+    C1.par.forEach((par, hIdx) => {
+      const s = parseInt((scores[gIdx]||scores[String(gIdx)]||{})[hIdx] ?? (scores[gIdx]||scores[String(gIdx)]||{})[String(hIdx)]) || 0;
+      if (s) { total += s; pts += getPoints(s, par) || 0; }
+    });
+    // Nine 2
+    C2.par.forEach((par, hIdx) => {
+      const gh = 9 + hIdx;
+      const s = parseInt((scores[gIdx]||scores[String(gIdx)]||{})[gh] ?? (scores[gIdx]||scores[String(gIdx)]||{})[String(gh)]) || 0;
+      if (s) { total += s; pts += getPoints(s, par) || 0; }
+    });
+    const totalPar = C1.par.reduce((a,b)=>a+b,0) + C2.par.reduce((a,b)=>a+b,0);
+    const diff = total > 0 ? total - (C1.par.filter((_,i)=>{
+      const s=parseInt((scores[gIdx]||scores[String(gIdx)]||{})[i]||(scores[gIdx]||scores[String(gIdx)]||{})[String(i)])||0; return s>0;
+    }).reduce((a,_,i)=>a+C1.par[i],0) + C2.par.filter((_,i)=>{
+      const gh=9+i; const s=parseInt((scores[gIdx]||scores[String(gIdx)]||{})[gh]||(scores[gIdx]||scores[String(gIdx)]||{})[String(gh)])||0; return s>0;
+    }).reduce((a,_,i)=>a+C2.par[i],0)) : null;
+    return { total, pts, diff };
+  });
+
+  const totalCells = cols.map((c, gIdx) =>
+    `<td id="${prefix}-tot-${gIdx}" style="font-weight:800;font-size:15px;background:var(--gray-100);padding:5px 5px;border-top:2px solid var(--gray-300)">${c.total||''}</td>`
+  ).join('');
+  const ptsCells = cols.map((c, gIdx) =>
+    `<td id="${prefix}-pts-${gIdx}" style="font-weight:800;font-size:15px;color:var(--green);background:var(--green-pale);padding:5px 5px;border-top:2px solid var(--gray-300)">${c.pts}</td>`
+  ).join('');
+
+  const numCols = groupPlayers.length;
+  return `
+  <div style="background:var(--white);border-top:2px solid var(--gray-300);overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tbody>
+        <tr>
+          <td style="font-weight:800;font-size:13px;padding:5px 8px;background:var(--gray-100);white-space:nowrap;min-width:80px;position:sticky;left:0;z-index:2;border-top:2px solid var(--gray-300)">Total Score</td>
+          ${totalCells}
+        </tr>
+        <tr>
+          <td style="font-weight:800;font-size:13px;padding:5px 8px;background:var(--green-pale);white-space:nowrap;min-width:80px;position:sticky;left:0;z-index:2">Total Points</td>
+          ${ptsCells}
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
 // ── Scoring screen ─────────────────────────────────────────────────────────────
 function renderScoring(state) {
   const { nine1, nine2, groupId, groupPlayers, scores, date, saveIndicator } = state;
@@ -412,6 +477,7 @@ function renderScoring(state) {
     ${renderNineTable(nine1, 0, groupPlayers, scores)}
     <div class="divider" style="margin:8px 12px"></div>
     ${renderNineTable(nine2, 1, groupPlayers, scores)}
+    ${renderGrandTotals(nine1, nine2, groupPlayers, scores, 'sc')}
     <div style="padding:12px;display:flex;gap:8px">
       <button class="btn" id="scoring-back" style="flex:1">← Setup</button>
       <button class="btn btn-primary" id="save-lb-btn" style="flex:2">Save & View Leaderboard</button>
@@ -593,13 +659,65 @@ function renderGroupScorecard(group) {
       </div>`;
   }).join('<div style="height:1px;background:var(--gray-200);margin:8px 0"></div>');
 
+  // Grand totals across both nines
+  const grandTotals = players.map((p, gIdx) => {
+    let total = 0, pts = 0;
+    nines.forEach((nine, nineIdx) => {
+      const C2 = COURSES[nine];
+      C2.par.forEach((par, hIdx) => {
+        const gh = nineIdx * 9 + hIdx;
+        const ps = group.scores[gIdx] || group.scores[String(gIdx)] || {};
+        const s = parseInt(ps[gh] ?? ps[String(gh)]) || 0;
+        if (s) { total += s; pts += getPoints(s, par) || 0; }
+      });
+    });
+    const target = Math.max(0, 36 - p.hdcp);
+    const diff = pts - target;
+    const diffStr = diff === 0 ? 'E' : diff > 0 ? `+${diff}` : `${diff}`;
+    const diffColor = diff >= 0 ? '#2e7d32' : '#c62828';
+    return { total, pts, target, diff, diffStr, diffColor };
+  });
+
+  const gtRow = `
+    <div style="margin-top:10px;border:2px solid var(--gray-300);border-radius:var(--radius-md);overflow:hidden">
+      <div style="background:var(--gray-100);padding:6px 10px;font-size:12px;font-weight:700;color:var(--gray-600)">Round Totals</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--gray-50)">
+              <th style="text-align:left;padding:5px 8px;min-width:72px;position:sticky;left:0;background:var(--gray-50)">Player</th>
+              <th style="padding:5px 6px;text-align:center">Score</th>
+              <th style="padding:5px 6px;text-align:center">Points</th>
+              <th style="padding:5px 6px;text-align:center">Target</th>
+              <th style="padding:5px 6px;text-align:right">vs Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${players.map((p, gIdx) => {
+              const g = grandTotals[gIdx];
+              return `<tr style="${gIdx%2===0?'background:var(--white)':'background:var(--gray-50)'}">
+                <td style="padding:6px 8px;font-weight:700;white-space:nowrap;position:sticky;left:0;background:inherit">
+                  ${teeDot(p.tee)}${(p.name||'?').split(' ')[0]}
+                  ${p.isGuest?`<span style="font-size:9px;background:var(--gold-pale);color:#7a5c00;border-radius:20px;padding:1px 5px;margin-left:3px">G</span>`:''}
+                </td>
+                <td style="text-align:center;font-weight:700">${g.total||'—'}</td>
+                <td style="text-align:center;font-weight:700;color:var(--green)">${g.pts}</td>
+                <td style="text-align:center;color:var(--gray-400)">${g.target}</td>
+                <td style="text-align:right;font-weight:800;font-size:15px;color:${g.diffColor}">${g.diffStr}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
   // Points legend
   const legend = `<div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 0 2px;font-size:11px;color:var(--gray-400)">
     <span>Eagle=8</span><span>Birdie=4</span><span>Par=2</span><span>Bogey=1</span><span>Double+=0</span>
     <span style="margin-left:4px">● = stroke hole</span>
   </div>`;
 
-  return tables + legend;
+  return tables + gtRow + legend;
 }
 
 function showGroupModal(group) {
