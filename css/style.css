@@ -365,3 +365,26 @@ table.scorecard td:not(:first-child) {
   min-width: 58px;
   max-width: 68px;
 }
+
+/* ── Birdie / Eagle circles on score badges ───────────────────────────────── */
+.score-input.s-birdie {
+  border-radius: 50% !important;
+  border-width: 2px !important;
+}
+.score-input.s-eagle {
+  box-shadow: 0 0 0 3px #AFA9EC, 0 0 0 5px #EEEDFE !important;
+  border-radius: 50% !important;
+  border-width: 2px !important;
+}
+
+/* Same circles for the score badges in the modal scorecard */
+.score-badge.s-birdie {
+  border-radius: 50% !important;
+  border-width: 2px !important;
+  border-color: #5DCAA5 !important;
+}
+.score-badge.s-eagle {
+  border-radius: 50% !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px #AFA9EC, 0 0 0 5px #EEEDFE !important;
+}
