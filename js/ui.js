@@ -544,11 +544,13 @@ function computePlayerResults(group) {
       return s;
     });
     const holesPlayed = hScores.filter(s => s > 0).length;
+    // "Thru" = the highest hole number (1-based) that has a score entered
+    const thru = hScores.reduce((last, s, idx) => s > 0 ? idx + 1 : last, 0);
     const target = Math.max(0, 36 - p.hdcp);
     return {
       name: p.name, hdcp: p.hdcp, tee: p.tee,
       total, pts, target, diff: pts - target,
-      holesPlayed, playedPar, totalPar, groupId,
+      holesPlayed, thru, playedPar, totalPar, groupId,
       fbKey: group.fbKey || '',
       hScores, pars, hdcps
     };
@@ -572,8 +574,9 @@ function renderStandings(allGroups, myGroupId) {
   }
 
   const headerRow = `
-    <div class="lb-header-row">
+    <div class="lb-header-row" style="grid-template-columns:30px 1fr 40px 52px 52px 64px">
       <span>#</span><span>Player</span>
+      <span style="text-align:center">Thru</span>
       <span style="text-align:center">Pts</span>
       <span style="text-align:center">Score</span>
       <span style="text-align:right">vs Target</span>
@@ -586,14 +589,16 @@ function renderStandings(allGroups, myGroupId) {
     const holesStr  = p.holesPlayed < 18 ? ` (${p.holesPlayed}H)` : '';
     const gidSafe   = (p.groupId || '').replace(/"/g, '&quot;');
     const fbKeySafe = (p.fbKey || '').replace(/"/g, '&quot;');
+    const thruStr = p.thru === 18 ? 'F' : p.thru > 0 ? `${p.thru}` : '—';
     return `
       <div class="lb-row ${isMine ? 'lb-mine' : ''}" data-open-group="${gidSafe}" data-fb-key="${fbKeySafe}"
-           style="cursor:pointer">
+           style="cursor:pointer;grid-template-columns:30px 1fr 40px 52px 52px 64px">
         <div class="lb-rank ${rankClass(i)}">${i+1}</div>
         <div>
-          <div class="lb-name">${p.name}${holesStr} <span style="font-size:11px;color:var(--gray-400)">▶</span></div>
+          <div class="lb-name">${p.name} <span style="font-size:11px;color:var(--gray-400)">▶</span></div>
           <div class="lb-sub">${p.groupId} · ${teeDot(p.tee)}${p.tee} · H${p.hdcp} · Target ${p.target}</div>
         </div>
+        <div class="lb-num"><div class="val" style="font-size:14px">${thruStr}</div><div class="lbl">thru</div></div>
         <div class="lb-num"><div class="val">${p.pts}</div><div class="lbl">pts</div></div>
         <div class="lb-num"><div class="val">${p.total||'—'}</div><div class="lbl">${scoreStr}</div></div>
         <div class="lb-diff">${diffStr(p.diff)}<div class="lbl">vs target</div></div>
@@ -644,11 +649,17 @@ function renderGroupScorecard(group) {
         const cls = s ? getScoreClass(s, par) : '';
         const hasStroke = playerGetsStroke(p.hdcp, oh);
         if (s) { nineTotal += s; ninePts += getPoints(s, par) || 0; }
+        const diff = s ? s - par : 0;
+        const badgeStyle = (() => {
+          if (diff >= 2) return 'box-shadow:0 0 0 2px #E24B4A,0 0 0 4px #FCEBEB;border-color:#E24B4A;'; // double square
+          if (diff === 1) return 'border:2px solid #E24B4A;';  // single square
+          return '';
+        })();
         return `<td style="padding:2px;text-align:center">
           <div class="score-badge ${cls}" style="
             display:inline-block;width:26px;height:26px;line-height:26px;
             border-radius:4px;font-size:13px;font-weight:700;text-align:center;
-            border:1px solid var(--gray-200);background:var(--white)">
+            border:1px solid var(--gray-200);background:var(--white);${badgeStyle}">
             ${s||''}
           </div>
           ${hasStroke ? '<div style="width:5px;height:5px;border-radius:50%;background:var(--blue-text);margin:1px auto 0"></div>'
@@ -854,7 +865,7 @@ function renderSkinsTab(allGroups) {
             </div>
             <div class="skin-winner">
               <div class="name">${s.winner}</div>
-              <div class="score">${s.raw}${s.usedStroke?`<span class="badge-net">net ${s.raw - 1}</span>`:''}</div>
+              <div class="score">${getScoreLabel(s.raw, s.par)}${s.usedStroke?`<span class="badge-net" style="margin-left:4px">net</span>`:''}</div>
             </div>
           </div>`).join('');
 
