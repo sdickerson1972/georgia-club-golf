@@ -506,6 +506,9 @@ function renderScoring(state) {
     </div>
     <div class="save-indicator" id="save-indicator">${saveIndicator||''}</div>
   </div>
+  <div id="save-warn-banner" style="display:none;background:#c0392b;color:#fff;padding:8px 16px;font-size:13px;font-weight:600;text-align:center">
+    ⚠ Scores not saved to cloud — tap Save before leaving this screen
+  </div>
   <div class="content">
     ${renderNineTable(nine1, 0, groupPlayers, scores)}
     <div class="divider" style="margin:8px 12px"></div>

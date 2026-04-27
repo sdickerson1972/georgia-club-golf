@@ -483,22 +483,34 @@ function attachListeners() {
 
   // Debounced autosave to Firebase — fires 2s after the last score entry
   let autoSaveTimer = null;
+  let saveFailCount = 0;
+
+  function setSaveIndicator(msg, isError) {
+    state.saveIndicator = msg;
+    const ind = document.getElementById('save-indicator');
+    if (ind) {
+      ind.textContent = msg;
+      ind.style.color = isError ? '#ffcc00' : 'rgba(255,255,255,0.7)';
+    }
+    // Also show/hide the persistent warning banner
+    const warn = document.getElementById('save-warn-banner');
+    if (warn) warn.style.display = isError ? 'block' : 'none';
+  }
+
   const scheduleAutoSave = () => {
     clearTimeout(autoSaveTimer);
-    const ind = document.getElementById('save-indicator');
-    if (ind) ind.textContent = 'Saving…';
+    setSaveIndicator('Saving…', false);
     autoSaveTimer = setTimeout(async () => {
       try {
         await FB.saveGroup(state.date, state.groupId, {
           groupId: state.groupId, nine1: state.nine1, nine2: state.nine2,
           players: state.groupPlayers, scores: state.scores
         });
-        state.saveIndicator = 'Auto-saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-        const ind2 = document.getElementById('save-indicator');
-        if (ind2) ind2.textContent = state.saveIndicator;
+        saveFailCount = 0;
+        setSaveIndicator('Auto-saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), false);
       } catch (e) {
-        const ind2 = document.getElementById('save-indicator');
-        if (ind2) ind2.textContent = 'Auto-save failed';
+        saveFailCount++;
+        setSaveIndicator(`⚠ Save failed (${saveFailCount}x) — tap Save`, true);
         console.warn('Autosave failed:', e);
       }
     }, 2000);
@@ -593,8 +605,12 @@ function attachListeners() {
   });
 
   const doSave = async (thenGo) => {
-    const ind = document.getElementById('save-indicator');
-    if (ind) ind.textContent = 'Saving…';
+    setSaveIndicator('Saving…', false);
+    const saveLbBtn = document.getElementById('save-lb-btn');
+    const saveBtn   = document.getElementById('save-btn');
+    if (saveLbBtn) { saveLbBtn.disabled = true; saveLbBtn.textContent = 'Saving…'; }
+    if (saveBtn)   { saveBtn.disabled = true; }
+
     try {
       // Sanitize scores — convert all values to integers, remove nulls/empties
       const cleanScores = {};
@@ -607,30 +623,37 @@ function attachListeners() {
       });
 
       const payload = {
-        groupId:  state.groupId,
-        nine1:    state.nine1,
-        nine2:    state.nine2,
-        players:  state.groupPlayers,
-        scores:   cleanScores,
+        groupId: state.groupId, nine1: state.nine1, nine2: state.nine2,
+        players: state.groupPlayers, scores: cleanScores,
       };
 
       console.log('Saving payload:', JSON.stringify(payload));
       await FB.saveGroup(state.date, state.groupId, payload);
-      state.saveIndicator = 'Saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+
+      // Verify save actually landed in Firebase
+      const verify = await FB.loadGroups(state.date);
+      const saved  = Object.values(verify).find(g => g.groupId === state.groupId);
+      if (!saved || !saved.nine1) throw new Error('Data not confirmed in Firebase after save');
+
+      saveFailCount = 0;
       saveSession();
+      setSaveIndicator('Saved ✓ ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), false);
       showToast('Scores saved ✓');
+
       if (thenGo === 'lb') {
-        try { state.todayGroups = await FB.loadGroups(state.date); } catch(e) { state.todayGroups = {}; }
+        state.todayGroups = verify;
         state.screen = 'leaderboard'; render();
       } else {
-        if (ind) ind.textContent = state.saveIndicator;
+        if (saveLbBtn) { saveLbBtn.disabled = false; saveLbBtn.textContent = 'Save & View Leaderboard'; }
+        if (saveBtn)   { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
       }
     } catch (e) {
-      // Show the actual Firebase error message to help diagnose
       const msg = e?.message || e?.code || String(e);
+      setSaveIndicator('⚠ Save failed — tap Save to retry', true);
       showToast('Save failed: ' + msg.slice(0, 60));
-      console.error('Save error full details:', e);
-      if (ind) ind.textContent = 'Save failed';
+      console.error('Save error:', e);
+      if (saveLbBtn) { saveLbBtn.disabled = false; saveLbBtn.textContent = 'Save & View Leaderboard'; }
+      if (saveBtn)   { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
     }
   };
 
