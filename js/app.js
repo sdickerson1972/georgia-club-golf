@@ -718,10 +718,6 @@ function attachListeners() {
   });
   on('scoring-back', 'click', () => { state.screen = 'setup'; render(); });
 
-  // Refresh todayGroups when going home from setup so Rejoin list is current
-  on('setup-back', 'click', async () => {
-
-
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
   on('lb-refresh', 'click', async () => {
