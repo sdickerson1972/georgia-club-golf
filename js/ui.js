@@ -39,9 +39,9 @@ function renderHome(hasActiveRound, todayGroups) {
       </div>
     </div>` : '';
 
-  // Rejoin section — shows active groups from Firebase that have real players
+  // Rejoin section — shows groups with nines set (players may still be loading)
   const activeGroups = Object.values(todayGroups || {}).filter(g =>
-    g && g.groupId && g.nine1 && g.nine2 && normalizeArray(g.players).length > 0
+    g && g.groupId && g.nine1 && g.nine2
   );
   const rejoinSection = activeGroups.length > 0 ? `
     <div style="margin:10px 12px 0;background:var(--white);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)">
