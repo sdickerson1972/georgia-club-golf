@@ -203,13 +203,13 @@ function attachListeners() {
       // Refresh groups from Firebase so Rejoin panel shows correctly
       try {
         state.todayGroups = await FB.loadGroups(todayStr());
-        // Debug — expose to console so we can inspect
         window._debug_todayGroups = state.todayGroups;
-        console.log('todayGroups after End Round:', JSON.stringify(state.todayGroups, null, 2));
-        const active = Object.values(state.todayGroups).filter(g =>
-          g && g.groupId && g.nine1 && g.nine2
-        );
-        console.log('Active groups with nines:', active.length, active.map(g=>g.groupId));
+        const groups = Object.values(state.todayGroups);
+        console.log('Total groups in Firebase:', groups.length);
+        groups.forEach(g => {
+          const players = normalizeArray(g.players);
+          console.log(`  ${g.groupId}: nine1=${g.nine1} nine2=${g.nine2} players=${players.length} scores=${JSON.stringify(g.scores||{})}`);
+        });
       } catch(e) { console.error('Failed to load groups:', e); }
       render();
     }

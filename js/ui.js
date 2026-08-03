@@ -39,10 +39,18 @@ function renderHome(hasActiveRound, todayGroups) {
       </div>
     </div>` : '';
 
-  // Rejoin section — shows groups with nines set (players may still be loading)
-  const activeGroups = Object.values(todayGroups || {}).filter(g =>
-    g && g.groupId && g.nine1 && g.nine2
-  );
+  // Rejoin section — shows groups with nines set and at least one saved score
+  const allGroups = Object.values(todayGroups || {});
+  const activeGroups = allGroups.filter(g => {
+    if (!g || !g.groupId || !g.nine1 || !g.nine2) return false;
+    // Must have at least one real score saved (not just a claim placeholder)
+    const scores = g.scores || {};
+    const hasScores = Object.keys(scores).some(gIdx => {
+      const ps = scores[gIdx] || {};
+      return Object.keys(ps).some(hIdx => parseInt(ps[hIdx]) > 0);
+    });
+    return hasScores;
+  });
   const rejoinSection = activeGroups.length > 0 ? `
     <div style="margin:10px 12px 0;background:var(--white);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)">
       <div style="font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:8px">🔄 Rejoin a group</div>
