@@ -271,6 +271,22 @@ function renderSetup(state, roster) {
       <button class="btn btn-xs btn-danger" data-rem="${i}">✕</button>
     </div>`).join('');
 
+  // Pre-compute group select options (can't use IIFE inside template literal)
+  const _takenGroups = new Set(
+    Object.values(todayGroups || {})
+      .filter(g => g.groupId !== groupId)
+      .map(g => g.groupId)
+  );
+  const _allGroupNames = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
+  const _availableGroups = _allGroupNames.filter(g => !_takenGroups.has(g));
+  const groupSelectOptions = _allGroupNames.map(g => {
+    const taken    = _takenGroups.has(g);
+    const selected = groupId === g || (_takenGroups.has(groupId) && g === _availableGroups[0]);
+    return '<option' + (selected ? ' selected' : '') + (taken ? ' disabled' : '')
+      + (taken ? ' style="color:var(--gray-400)"' : '') + '>'
+      + g + (taken ? ' (taken)' : '') + '</option>';
+  }).join('');
+
   // Nine button label shows order badge if selected
   const nineBtnLabel = (n) => {
     if (n === nine1) return `${n} <span style="font-size:10px;background:#fff;color:var(--green);border-radius:10px;padding:1px 5px;margin-left:2px">1st</span>`;
@@ -303,22 +319,7 @@ function renderSetup(state, roster) {
         <div class="field" style="max-width:150px">
           <label class="field-label">Group</label>
           <select id="group-select">
-            ${(() => {
-              // Build set of group names already taken by OTHER active groups today
-              const takenGroups = new Set(
-                Object.values(todayGroups || {})
-                  .filter(g => g.groupId !== groupId)
-                  .map(g => g.groupId)
-              );
-              const allGroups = ['Group 1','Group 2','Group 3','Group 4','Group 5','Group 6','Group 7','Group 8'];
-              // Auto-select first available group if current groupId is taken
-              const available = allGroups.filter(g => !takenGroups.has(g));
-              return allGroups.map(g => {
-                const taken = takenGroups.has(g);
-                const selected = groupId === g || (!takenGroups.has(groupId) ? groupId === g : g === available[0]);
-                return `<option ${selected?'selected':''} ${taken?'disabled':''} style="${taken?'color:var(--gray-400)':''}">${g}${taken?' (taken)':''}</option>`;
-              }).join('');
-            })()}
+            ${groupSelectOptions}
           </select>
         </div>
       </div>
