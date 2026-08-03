@@ -109,7 +109,7 @@ function render() {
   const app = document.getElementById('app');
   switch (state.screen) {
     case 'home':
-      app.innerHTML = renderHome(state.groupPlayers.length > 0); break;
+      app.innerHTML = renderHome(state.groupPlayers.length > 0, state.todayGroups); break;
     case 'admin':
       app.innerHTML = state.adminUnlocked ? renderAdmin(state.roster, state.todayGroups) : renderAdminLock(); break;
     case 'setup':
@@ -189,16 +189,59 @@ function attachListeners() {
     } catch(e) { console.warn('Could not claim group:', e); }
     state.screen = 'setup'; render();
   });
-  on('btn-resume', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
-  on('btn-end-round', 'click', () => {
+  on('btn-resume', 'click', async () => {
+    stopLbListener();
+    try { state.todayGroups = await FB.loadGroups(todayStr()); } catch(e) {}
+    state.screen = 'scoring'; render();
+  });
+  on('btn-end-round', 'click', async () => {
     if (confirm('End the current round? This will clear your group and scores.')) {
       clearSession();
       state.groupPlayers = [];
       state.scores = {};
       state.groupId = 'Group 1';
+      // Refresh groups from Firebase so Rejoin panel shows correctly
+      try { state.todayGroups = await FB.loadGroups(todayStr()); } catch(e) {}
       render();
     }
   });
+  // ── Rejoin a group from Firebase ──────────────────────────────────────────
+  document.querySelectorAll('[data-rejoin]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const groupId = btn.dataset.rejoin;
+      // Find the group in Firebase
+      const group = Object.values(state.todayGroups).find(g => g.groupId === groupId);
+      if (!group) { showToast('Could not find group — try refreshing'); return; }
+
+      // Load the group's players and scores into state
+      const players = normalizeArray(group.players);
+      state.groupId      = group.groupId;
+      state.nine1        = group.nine1;
+      state.nine2        = group.nine2;
+      state.groupPlayers = players;
+      state.date         = todayStr();
+
+      // Convert Firebase scores object back to array format for scoring screen
+      const rawScores = group.scores || {};
+      state.scores = {};
+      players.forEach((_, gIdx) => {
+        const ps = rawScores[gIdx] || rawScores[String(gIdx)] || {};
+        state.scores[gIdx] = [];
+        // Rebuild as flat array indexed by hole number
+        const allPars = [...(COURSES[group.nine1]?.par||[]), ...(COURSES[group.nine2]?.par||[])];
+        allPars.forEach((_, hIdx) => {
+          const s = parseInt(ps[hIdx] ?? ps[String(hIdx)]) || 0;
+          state.scores[gIdx][hIdx] = s > 0 ? String(s) : '';
+        });
+      });
+
+      saveSession();
+      showToast(`Rejoined ${groupId} ✓`);
+      state.screen = 'scoring';
+      render();
+    });
+  });
+
   on('btn-lb', 'click', async () => {
     const hasRound = state.groupPlayers.length > 0;
     const prevGroupId = hasRound ? state.groupId : '';
@@ -666,6 +709,9 @@ function attachListeners() {
   });
   on('scoring-back', 'click', () => { state.screen = 'setup'; render(); });
 
+  // Refresh todayGroups when going home from setup so Rejoin list is current
+  on('setup-back', 'click', async () => {
+
 
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
@@ -694,7 +740,11 @@ function attachListeners() {
     render();
   });
 
-  on('lb-home', 'click', () => { stopLbListener(); state.screen = 'home'; render(); });
+  on('lb-home', 'click', async () => {
+    stopLbListener();
+    try { state.todayGroups = await FB.loadGroups(todayStr()); } catch(e) {}
+    state.screen = 'home'; render();
+  });
   on('lb-back-scoring', 'click', () => { stopLbListener(); state.screen = 'scoring'; render(); });
 
   on('tab-standings', 'click', () => {
@@ -756,11 +806,12 @@ async function boot() {
       state.roster = [];
     }
 
+    // Load today's groups so Rejoin panel shows on home screen
+    try { state.todayGroups = await FB.loadGroups(todayStr()); } catch(e) { state.todayGroups = {}; }
+
     // Restore any in-progress round from today
     const hasSession = loadSession();
     if (hasSession) {
-      // Show home with a "Resume Round" banner instead of jumping straight
-      // into scoring — gives the user control
       state.screen = 'home';
     }
 

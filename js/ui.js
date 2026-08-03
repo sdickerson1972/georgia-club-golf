@@ -28,7 +28,7 @@ function rankClass(i) {
 }
 
 // ── Home screen ────────────────────────────────────────────────────────────────
-function renderHome(hasActiveRound) {
+function renderHome(hasActiveRound, todayGroups) {
   const resumeBanner = hasActiveRound ? `
     <div style="margin:12px 12px 0;background:#fff3cd;border:1.5px solid #ffc107;border-radius:var(--radius-lg);padding:14px 16px">
       <div style="font-size:13px;font-weight:700;color:#7a5c00;margin-bottom:8px">⛳ Round in progress</div>
@@ -39,6 +39,37 @@ function renderHome(hasActiveRound) {
       </div>
     </div>` : '';
 
+  // Rejoin section — shows active groups from Firebase that have real players
+  const activeGroups = Object.values(todayGroups || {}).filter(g =>
+    g && g.groupId && g.nine1 && g.nine2 && normalizeArray(g.players).length > 0
+  );
+  const rejoinSection = activeGroups.length > 0 ? `
+    <div style="margin:10px 12px 0;background:var(--white);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)">
+      <div style="font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:8px">🔄 Rejoin a group</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Continue scoring for a group already in progress</div>
+      ${activeGroups.map(g => {
+        const players = normalizeArray(g.players);
+        const names = players.map(p=>p.name).join(', ');
+        const holesScored = (() => {
+          let max = 0;
+          const scores = g.scores || {};
+          players.forEach((_, gIdx) => {
+            const ps = scores[gIdx] || scores[String(gIdx)] || {};
+            const played = Object.keys(ps).filter(k => parseInt(ps[k]) > 0).length;
+            max = Math.max(max, played);
+          });
+          return max;
+        })();
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--gray-100)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${g.groupId} <span style="font-size:11px;color:var(--gray-400);font-weight:400">${g.nine1}+${g.nine2}</span></div>
+            <div style="font-size:11px;color:var(--gray-400);margin-top:1px">${names} · ${holesScored}H scored</div>
+          </div>
+          <button class="btn btn-sm btn-primary" data-rejoin="${g.groupId}">Rejoin</button>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
   return `
   <div class="header">
     <h1>The Georgia Club</h1>
@@ -46,6 +77,7 @@ function renderHome(hasActiveRound) {
   </div>
   <div class="content" style="padding-top:8px">
     ${resumeBanner}
+    ${rejoinSection}
     <div class="home-card" id="btn-score">
       <div class="home-card-icon">⛳</div>
       <div class="home-card-text">
