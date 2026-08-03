@@ -1,77 +1,115 @@
-# Firebase Security Rules & Admin Auth Setup
+// ── Skins computation ──────────────────────────────────────────────────────────
+// Rules:
+//  1. Skins are calculated across ALL players playing the same two nines,
+//     regardless of which group they are in.
+//  2. Find the best raw score on each hole. One player with the best raw wins
+//     outright — strokes play no part.
+//  3. If two or more players TIE on raw score, the stroke is used as tiebreaker
+//     at ANY score level (eagle, birdie, par, bogey, etc.):
+//     net = raw - 1 if player gets stroke, else raw.
+//     The player with the best net among the tied players wins.
+//  4. A stroke NEVER elevates a worse raw score — it only breaks ties.
+//  5. Ties after stroke tiebreaker → no skin, no carryover.
+//
+//  Examples:
+//   Eagle vs par             → eagle wins outright (best raw)
+//   Two eagles, one +stroke  → net eagle-1 vs net eagle → stroke player wins
+//   Two birdies, one +stroke → stroke player wins tie
+//   Birdie vs par+stroke     → birdie wins outright (best raw)
+//   Par vs bogey+stroke      → net 4 vs net 4 → tie, no skin
+//   Par vs bogey no stroke   → par wins outright (best raw)
+//   Par+stroke vs par        → net 3 vs net 4 → stroke player wins
 
-## Step 1 — Enable Email/Password Authentication
+// Merge all groups playing the same nine combination into one virtual group
+function mergeGroupsByNines(allGroups) {
+  const merged = {}; // key = "nine1|nine2" -> { nine1, nine2, players:[], scores:{} }
 
-1. Go to https://console.firebase.google.com → your project
-2. Click **Build → Authentication** in the left sidebar
-3. Click **Get started** (or **Sign-in method** tab)
-4. Click **Email/Password** → Enable the first toggle → **Save**
+  Object.values(allGroups || {}).forEach(group => {
+    const { nine1, nine2 } = group;
+    if (!nine1 || !nine2 || !COURSES[nine1] || !COURSES[nine2]) return;
+    const players = normalizeArray(group.players);
+    const scores  = group.scores || {};
+    // Skip claimed-only placeholders with no real players
+    if (!players || players.length === 0) return;
+    if (!COURSES[nine1] || !COURSES[nine2]) return;
 
-## Step 2 — Create the Admin User
-
-1. Still in Authentication, click the **Users** tab
-2. Click **Add user**
-3. Enter an email (e.g. `admin@georgiagolfclub.com`) and a strong password
-4. Click **Add user**
-5. **Copy the email and password** — you'll need them in Step 3
-
-## Step 3 — Add admin credentials to index.html
-
-Open `index.html` and find these two lines:
-
-```javascript
-window._adminEmail    = "YOUR_ADMIN_EMAIL";
-window._adminPassword = "YOUR_ADMIN_PASSWORD";
-```
-
-Replace with the email and password you just created:
-
-```javascript
-window._adminEmail    = "admin@georgiagolfclub.com";
-window._adminPassword = "your-strong-password-here";
-```
-
-Save and re-upload `index.html` to GitHub.
-
-## Step 4 — Set the Database Security Rules
-
-1. Go to Firebase Console → **Build → Realtime Database**
-2. Click the **Rules** tab
-3. Replace everything with:
-
-```json
-{
-  "rules": {
-    "roster": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "rounds": {
-      "$date": {
-        "$group": {
-          ".read": true,
-          ".write": true
-        }
-      }
+    const key = `${nine1}|${nine2}`;
+    if (!merged[key]) {
+      merged[key] = { nine1, nine2, players: [], scores: {} };
     }
-  }
+    const m = merged[key];
+    players.forEach((p, gIdx) => {
+      const newIdx = m.players.length;
+      m.players.push({ ...p, groupId: group.groupId });
+      // Copy scores — resolve Firebase object or array format
+      const pScores = scores[gIdx] || scores[String(gIdx)] || {};
+      m.scores[newIdx] = pScores;
+    });
+  });
+
+  return Object.values(merged);
 }
-```
 
-4. Click **Publish**
+function computeSkins(mergedGroup) {
+  const { nine1, nine2, players, scores } = mergedGroup;
+  if (!players || players.length < 2) return [];
 
-## What these rules do
+  const { pars, hdcps } = getRoundArrays(nine1, nine2);
+  const skins = [];
 
-- **Roster read** — any phone can load the player list (needed for setup)
-- **Roster write** — only an authenticated admin user can save roster changes
-- **Rounds read/write** — any phone can read and write scores (needed for live group scoring)
-- **Everything else** — blocked completely
+  pars.forEach((par, hIdx) => {
+    const holeData = players.map((p, gIdx) => {
+      const playerScores = scores[gIdx] || scores[String(gIdx)] || {};
+      const raw = parseInt(playerScores[hIdx] ?? playerScores[String(hIdx)]) || 0;
+      if (!raw) return null;
+      const hasStroke = playerGetsStroke(p.hdcp, hdcps[hIdx]);
+      const net = raw - (hasStroke ? 1 : 0);
+      return { raw, net, hasStroke, name: p.name, groupId: p.groupId, gIdx };
+    });
 
-## How it works in the app
+    // Skip hole if any player hasn't posted a score yet
+    if (holeData.some(d => d === null)) return;
 
-When you enter the admin PIN in the app, it:
-1. Checks the PIN locally (fast)
-2. Signs into Firebase with the admin credentials (gives write permission)
-3. Now "Save Roster to Cloud" works
+    const overallHdcp = hdcps[hIdx];
+    const nineLabel   = hIdx < 9 ? nine1 : nine2;
+    const minRaw      = Math.min(...holeData.map(d => d.raw));
 
-When you tap ← Back from the admin screen, it signs out automatically, revoking write access.
+    // Step 1 — find all players tied at the best raw score
+    const rawWinners = holeData.filter(d => d.raw === minRaw);
+
+    if (rawWinners.length === 1) {
+      // Outright best raw score — wins regardless of strokes
+      const w = rawWinners[0];
+      skins.push({
+        hole: hIdx + 1, winner: w.name, groupId: w.groupId,
+        raw: w.raw, par, overallHdcp, nineLabel, usedStroke: false
+      });
+      return;
+    }
+
+    // Step 2 — tie on raw score: use net (raw - stroke) as tiebreaker
+    // This applies for ALL score levels — eagle, birdie, par, bogey, etc.
+    // A stroke can break a tie at any level but never elevates a worse raw score
+    const minNet     = Math.min(...rawWinners.map(d => d.net));
+    const netWinners = rawWinners.filter(d => d.net === minNet);
+
+    if (netWinners.length === 1) {
+      const w = netWinners[0];
+      skins.push({
+        hole: hIdx + 1, winner: w.name, groupId: w.groupId,
+        raw: w.raw, par, overallHdcp, nineLabel, usedStroke: w.hasStroke
+      });
+    }
+    // Still tied after stroke tiebreaker → no skin
+  });
+
+  return skins;
+}
+
+function skinsSummary(skins) {
+  const counts = {};
+  skins.forEach(s => {
+    counts[s.winner] = (counts[s.winner] || 0) + 1;
+  });
+  return counts;
+}
