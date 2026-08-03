@@ -39,44 +39,50 @@ function renderHome(hasActiveRound, todayGroups) {
       </div>
     </div>` : '';
 
-  // Rejoin section — shows groups with nines set and at least one saved score
-  const allGroups = Object.values(todayGroups || {});
-  const activeGroups = allGroups.filter(g => {
-    if (!g || !g.groupId || !g.nine1 || !g.nine2) return false;
-    // Must have at least one real score saved (not just a claim placeholder)
-    const scores = g.scores || {};
-    const hasScores = Object.keys(scores).some(gIdx => {
-      const ps = scores[gIdx] || {};
-      return Object.keys(ps).some(hIdx => parseInt(ps[hIdx]) > 0);
+  // Rejoin section — shows groups with nines and at least one saved score
+  function groupHasScores(g) {
+    const sc = g.scores || {};
+    return Object.keys(sc).some(i => {
+      const ps = sc[i] || {};
+      return Object.keys(ps).some(h => parseInt(ps[h]) > 0);
     });
-    return hasScores;
+  }
+  function groupHolesScored(g) {
+    const players = normalizeArray(g.players);
+    const sc = g.scores || {};
+    let max = 0;
+    players.forEach(function(_, gIdx) {
+      const ps = sc[gIdx] || sc[String(gIdx)] || {};
+      const n = Object.keys(ps).filter(function(k){ return parseInt(ps[k]) > 0; }).length;
+      if (n > max) max = n;
+    });
+    return max;
+  }
+  const activeGroups = Object.values(todayGroups || {}).filter(function(g) {
+    return g && g.groupId && g.nine1 && g.nine2 && groupHasScores(g);
   });
-  const rejoinSection = activeGroups.length > 0 ? `
-    <div style="margin:10px 12px 0;background:var(--white);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)">
-      <div style="font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:8px">🔄 Rejoin a group</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Continue scoring for a group already in progress</div>
-      ${activeGroups.map(g => {
-        const players = normalizeArray(g.players);
-        const names = players.map(p=>p.name).join(', ');
-        const holesScored = (() => {
-          let max = 0;
-          const scores = g.scores || {};
-          players.forEach((_, gIdx) => {
-            const ps = scores[gIdx] || scores[String(gIdx)] || {};
-            const played = Object.keys(ps).filter(k => parseInt(ps[k]) > 0).length;
-            max = Math.max(max, played);
-          });
-          return max;
-        })();
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--gray-100)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${g.groupId} <span style="font-size:11px;color:var(--gray-400);font-weight:400">${g.nine1}+${g.nine2}</span></div>
-            <div style="font-size:11px;color:var(--gray-400);margin-top:1px">${names} · ${holesScored}H scored</div>
-          </div>
-          <button class="btn btn-sm btn-primary" data-rejoin="${g.groupId}">Rejoin</button>
-        </div>`;
-      }).join('')}
-    </div>` : '';
+
+  let rejoinRows = '';
+  activeGroups.forEach(function(g) {
+    const players = normalizeArray(g.players);
+    const names   = players.map(function(p){ return p.name; }).join(', ');
+    const holes   = groupHolesScored(g);
+    rejoinRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--gray-100)">'
+      + '<div>'
+      + '<div style="font-size:13px;font-weight:600">' + g.groupId + ' <span style="font-size:11px;color:var(--gray-400);font-weight:400">' + g.nine1 + '+' + g.nine2 + '</span></div>'
+      + '<div style="font-size:11px;color:var(--gray-400);margin-top:1px">' + (names||'No players') + ' · ' + holes + 'H scored</div>'
+      + '</div>'
+      + '<button class="btn btn-sm btn-primary" data-rejoin="' + g.groupId + '">Rejoin</button>'
+      + '</div>';
+  });
+
+  const rejoinSection = activeGroups.length > 0
+    ? '<div style="margin:10px 12px 0;background:var(--white);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)">'
+      + '<div style="font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:8px">🔄 Rejoin a group</div>'
+      + '<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Continue scoring for a group already in progress</div>'
+      + rejoinRows
+      + '</div>'
+    : '';
 
   return `
   <div class="header">
