@@ -537,6 +537,89 @@ function renderGrandTotals(nine1, nine2, groupPlayers, scores, idPrefix) {
 }
 
 // ── Scoring screen ─────────────────────────────────────────────────────────────
+function showEditNinesModal(state, onConfirm) {
+  const existing = document.getElementById('edit-nines-modal');
+  if (existing) existing.remove();
+
+  // Build current selection display
+  let sel1 = state.nine1, sel2 = state.nine2;
+
+  const modal = document.createElement('div');
+  modal.id = 'edit-nines-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center';
+
+  function renderModal() {
+    const nines = ['Red','Black','Silver'];
+    const btns = nines.map(n => {
+      const isFirst  = sel1 === n;
+      const isSecond = sel2 === n;
+      const badge    = isFirst ? ' <span style="font-size:10px;background:#fff;color:var(--green);border-radius:10px;padding:1px 5px">1st</span>'
+                     : isSecond ? ' <span style="font-size:10px;background:#fff;color:var(--green);border-radius:10px;padding:1px 5px">2nd</span>' : '';
+      const active   = isFirst || isSecond;
+      return '<button data-enine="' + n + '" style="flex:1;height:44px;border-radius:var(--radius-md);border:2px solid '
+        + (active ? 'var(--green)' : 'var(--gray-200)') + ';background:'
+        + (active ? 'var(--green-pale)' : 'var(--white)') + ';font-size:14px;font-weight:700;color:'
+        + (active ? 'var(--green)' : 'var(--gray-600)') + ';cursor:pointer">'
+        + n + badge + '</button>';
+    }).join('');
+
+    const changed = sel1 !== state.nine1 || sel2 !== state.nine2;
+    const swapped = sel1 === state.nine2 && sel2 === state.nine1;
+
+    let warning = '';
+    if (changed && !swapped) {
+      warning = '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:#7a5c00;margin-top:10px">'
+        + '⚠ Changing nines will clear all entered scores. Swapping the order keeps scores intact.</div>';
+    } else if (swapped) {
+      warning = '<div style="background:var(--green-pale);border:1px solid #a5d6a7;border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--green);margin-top:10px">'
+        + '✓ Swapping order — existing scores will be preserved and remapped.</div>';
+    }
+
+    modal.innerHTML = '<div style="background:var(--white);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:0 0 24px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px 12px;border-bottom:1px solid var(--gray-200)">'
+      + '<div style="font-size:16px;font-weight:700">Edit Nines</div>'
+      + '<button id="close-edit-nines" style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gray-200);background:var(--gray-50);font-size:18px;cursor:pointer">✕</button>'
+      + '</div>'
+      + '<div style="padding:16px">'
+      + '<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">Tap in order to select your two nines</div>'
+      + '<div style="display:flex;gap:8px">' + btns + '</div>'
+      + warning
+      + '</div>'
+      + '<div style="padding:0 16px;display:flex;gap:8px">'
+      + '<button id="cancel-edit-nines" class="btn" style="flex:1">Cancel</button>'
+      + '<button id="confirm-edit-nines" class="btn btn-primary" style="flex:2" '
+      + (!sel1 || !sel2 || (sel1===state.nine1&&sel2===state.nine2) ? 'disabled' : '') + '>Apply Changes</button>'
+      + '</div></div>';
+
+    document.body.appendChild(modal);
+
+    // Nine buttons
+    modal.querySelectorAll('[data-enine]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var n = btn.dataset.enine;
+        if (sel1 === n) { sel1 = sel2; sel2 = null; }
+        else if (sel2 === n) { sel2 = null; }
+        else if (!sel1) { sel1 = n; }
+        else if (!sel2) { sel2 = n; }
+        else { sel2 = sel1; sel1 = n; }
+        renderModal();
+      });
+    });
+
+    var closeEl = document.getElementById('close-edit-nines');
+    var cancelEl = document.getElementById('cancel-edit-nines');
+    var confirmEl = document.getElementById('confirm-edit-nines');
+    if (closeEl)  closeEl.addEventListener('click',  function(){ modal.remove(); });
+    if (cancelEl) cancelEl.addEventListener('click', function(){ modal.remove(); });
+    if (confirmEl) confirmEl.addEventListener('click', function(){
+      if (sel1 && sel2) { modal.remove(); onConfirm(sel1, sel2); }
+    });
+    modal.addEventListener('click', function(e){ if (e.target === modal) modal.remove(); });
+  }
+
+  renderModal();
+}
+
 function renderScoring(state) {
   const { nine1, nine2, groupId, groupPlayers, scores, date, saveIndicator } = state;
   return `
@@ -544,7 +627,7 @@ function renderScoring(state) {
     <div class="header-row">
       <div>
         <h1>${groupId}</h1>
-        <p>${nine1} + ${nine2} — ${date}</p>
+        <p>${nine1} + ${nine2} — ${date} <button id="edit-nines-btn" style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.25);border-radius:20px;font-size:11px;padding:2px 8px;cursor:pointer;margin-left:6px">Edit nines</button></p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-sm" id="save-btn" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.3)">Save</button>

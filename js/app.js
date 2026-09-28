@@ -711,6 +711,39 @@ function attachListeners() {
 
   on('save-btn',    'click', () => doSave(null));
   on('save-lb-btn', 'click', () => doSave('lb'));
+
+  // ── Edit Nines ─────────────────────────────────────────────────────────────
+  on('edit-nines-btn', 'click', () => {
+    showEditNinesModal(state, (newNine1, newNine2) => {
+      const oldNine1 = state.nine1, oldNine2 = state.nine2;
+      const isSwap   = newNine1 === oldNine2 && newNine2 === oldNine1;
+      const isChange = newNine1 !== oldNine1 || newNine2 !== oldNine2;
+      if (!isChange) return;
+
+      if (isSwap) {
+        // Swap order only — remap scores: holes 0-8 swapped with holes 9-17
+        var newScores = {};
+        state.groupPlayers.forEach(function(_, gIdx) {
+          var old = state.scores[gIdx] || [];
+          newScores[gIdx] = [];
+          for (var h = 0; h < 9; h++) newScores[gIdx][9 + h] = old[h] || '';
+          for (var h = 0; h < 9; h++) newScores[gIdx][h] = old[9 + h] || '';
+        });
+        state.scores = newScores;
+        showToast('Nines swapped — scores remapped ✓');
+      } else {
+        // Completely different nines — clear scores since hole pars change
+        state.scores = {};
+        showToast('Nines changed — scores cleared');
+      }
+
+      state.nine1 = newNine1;
+      state.nine2 = newNine2;
+      saveSession();
+      render();
+    });
+  });
+
   on('lb-btn', 'click', async () => {
     state.lbDate = todayStr();
     try { state.todayGroups = await FB.loadGroups(state.lbDate); } catch(e) { state.todayGroups = {}; }
