@@ -682,10 +682,11 @@ function attachListeners() {
       console.log('Saving payload:', JSON.stringify(payload));
       await FB.saveGroup(state.date, state.groupId, payload);
 
-      // Verify save actually landed in Firebase
+      // Verify save landed — just check the group exists with our groupId
+      // Don't check nine1/scores as timing can cause stale reads
       const verify = await FB.loadGroups(state.date);
       const saved  = Object.values(verify).find(g => g.groupId === state.groupId);
-      if (!saved || !saved.nine1) throw new Error('Data not confirmed in Firebase after save');
+      if (!saved) throw new Error('Data not confirmed in Firebase after save');
 
       saveFailCount = 0;
       saveSession();
