@@ -722,20 +722,19 @@ function attachListeners() {
       if (!isChange) return;
 
       if (isSwap) {
-        // Swap order only — remap scores: holes 0-8 swapped with holes 9-17
+        // Swap order — remap scores: holes 0-8 swap with holes 9-17
         var newScores = {};
         state.groupPlayers.forEach(function(_, gIdx) {
-          var old = state.scores[gIdx] || [];
+          var oldS = state.scores[gIdx] || [];
           newScores[gIdx] = [];
-          for (var h = 0; h < 9; h++) newScores[gIdx][9 + h] = old[h] || '';
-          for (var h = 0; h < 9; h++) newScores[gIdx][h] = old[9 + h] || '';
+          for (var h = 0; h < 9; h++) newScores[gIdx][9 + h] = oldS[h] || '';
+          for (var h = 0; h < 9; h++) newScores[gIdx][h] = oldS[9 + h] || '';
         });
         state.scores = newScores;
         showToast('Nines swapped — scores remapped ✓');
       } else {
-        // Completely different nines — clear scores since hole pars change
-        state.scores = {};
-        showToast('Nines changed — scores cleared');
+        // Different nines — keep scores, points recalculate from new pars
+        showToast('Nines updated — points recalculated ✓');
       }
 
       state.nine1 = newNine1;

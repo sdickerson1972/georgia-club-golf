@@ -563,16 +563,18 @@ function showEditNinesModal(state, onConfirm) {
         + n + badge + '</button>';
     }).join('');
 
-    const changed = sel1 !== state.nine1 || sel2 !== state.nine2;
-    const swapped = sel1 === state.nine2 && sel2 === state.nine1;
+    // Only show warnings once both nines are selected AND differ from original
+    const bothSelected = sel1 && sel2;
+    const swapped = bothSelected && sel1 === state.nine2 && sel2 === state.nine1;
+    const changed = bothSelected && (sel1 !== state.nine1 || sel2 !== state.nine2);
 
     let warning = '';
-    if (changed && !swapped) {
-      warning = '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:#7a5c00;margin-top:10px">'
-        + '⚠ Changing nines will clear all entered scores. Swapping the order keeps scores intact.</div>';
-    } else if (swapped) {
+    if (swapped) {
       warning = '<div style="background:var(--green-pale);border:1px solid #a5d6a7;border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--green);margin-top:10px">'
-        + '✓ Swapping order — existing scores will be preserved and remapped.</div>';
+        + '✓ Swapping order — scores will be remapped to match the new nine order.</div>';
+    } else if (changed) {
+      warning = '<div style="background:var(--green-pale);border:1px solid #a5d6a7;border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--green);margin-top:10px">'
+        + '✓ Scores kept — points and handicaps will recalculate for the new nines.</div>';
     }
 
     modal.innerHTML = '<div style="background:var(--white);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:0 0 24px">'
